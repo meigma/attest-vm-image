@@ -1,0 +1,58 @@
+name: CI
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # moon ci affected detection + git diff for check-dist need history.
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup mise
+        uses: jdx/mise-action@e6a8b3978addb5a52f2b4cd9d91eafa7f0ab959d # v4.2.0
+        with:
+          version: 2026.6.14
+          cache: true
+          # Installs every tool from mise.toml honoring mise.lock (locked →
+          # fail closed), including moon, and prepends the shim dir to PATH.
+
+      - name: Cache npm downloads
+        # Cache npm's content-addressable download cache, not node_modules —
+        # `npm ci` deletes node_modules on every run.
+        uses: actions/cache@2c8a9bd7457de244a408f35966fab2fb45fda9c8 # v6.0.0
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-npm-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-npm-
+
+      - name: Run Moon CI
+        # A repository's very first commit has no HEAD~1 for moon's affected
+        # detection (exactly the state of a fresh repo created from this
+        # template, where even `moon run` consults HEAD~1 under CI); fall back
+        # to the equivalent npm gate until history exists.
+        run: |
+          if git rev-parse --verify --quiet HEAD~1 >/dev/null; then
+            moon ci --summary minimal
+          else
+            npm ci && npm run ci
+          fi

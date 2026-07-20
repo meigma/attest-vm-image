@@ -1,0 +1,171 @@
+language: 'typescript'
+layer: 'application'
+stack: 'backend'
+
+project:
+  title: 'template-actions'
+  description: 'Meigma template for TypeScript GitHub Actions.'
+  owner: 'meigma'
+  maintainers:
+    - 'meigma'
+
+# Every task runs against `system` binaries that mise (mise.toml + mise.lock)
+# puts on PATH; moon manages no language toolchain itself.
+toolchains:
+  default: 'system'
+
+fileGroups:
+  configs:
+    - 'package.json'
+    - 'package-lock.json'
+    - 'tsconfig.json'
+    # Tool/version pins. Under the `system` toolchain moon does not hash the
+    # node binary's version, so the mise pins are inputs here too — bumping
+    # node (or any tool) in mise must invalidate cached tasks.
+    - 'mise.toml'
+    - 'mise.lock'
+  sources:
+    - 'src/**/*.ts'
+    - 'action.yml'
+  tests:
+    - '__tests__/**/*.ts'
+    - '__fixtures__/**/*.ts'
+    - 'jest.config.js'
+  styleConfigs:
+    - 'eslint.config.mjs'
+    - '.prettierrc.yml'
+    - '.prettierignore'
+  bundleConfigs:
+    - 'rollup.config.ts'
+  releaseConfig:
+    - 'release-please-config.json'
+    - '.release-please-manifest.json'
+
+workspace:
+  inheritedTasks:
+    include: []
+
+tasks:
+  # npm ci is authoritative and wipes node_modules; never declare node_modules
+  # as an input or output (moon must not hash/archive it). Repeat installs are
+  # fast thanks to npm's content-addressable ~/.npm cache. Stays CI-eligible
+  # (runInCI default) because tasks that run in CI may not depend on tasks
+  # excluded from it.
+  install:
+    command: 'npm ci'
+    inputs:
+      - '@group(configs)'
+    options:
+      cache: false
+
+  # Mutating; local convenience only. `check` uses format-check instead so it
+  # never rewrites files.
+  format:
+    command: 'npx prettier --write .'
+    deps:
+      - 'root:install'
+    options:
+      cache: false
+      runInCI: false
+
+  format-check:
+    command: 'npx prettier --check .'
+    deps:
+      - 'root:install'
+    inputs:
+      - '@group(sources)'
+      - '@group(tests)'
+      - '@group(styleConfigs)'
+      - '@group(configs)'
+      - '*.md'
+      - '.github/**/*.yml'
+    options:
+      cache: false
+
+  lint:
+    command: 'npm run lint'
+    deps:
+      - 'root:install'
+    inputs:
+      - '@group(sources)'
+      - '@group(tests)'
+      - '@group(styleConfigs)'
+      - '@group(configs)'
+    options:
+      cache: false
+
+  test:
+    command: 'npm test'
+    deps:
+      - 'root:install'
+    inputs:
+      - '@group(sources)'
+      - '@group(tests)'
+      - '@group(configs)'
+    options:
+      cache: false
+
+  # Local dist rebuild; the cacheable artifact task.
+  package:
+    command: 'npm run package'
+    deps:
+      - 'root:install'
+    inputs:
+      - '@group(sources)'
+      - '@group(bundleConfigs)'
+      - '@group(configs)'
+    outputs:
+      - 'dist'
+
+  # Deliberately re-runs the bundle via npm (NOT via the cached package task)
+  # so a cache restore can never mask nondeterminism, then
+  # `git diff --exit-code -- dist`.
+  check-dist:
+    command: 'npm run check-dist'
+    deps:
+      - 'root:install'
+    inputs:
+      - '@group(sources)'
+      - '@group(bundleConfigs)'
+      - '@group(configs)'
+      - 'dist/**'
+    options:
+      cache: false
+
+  # Network-dependent: new upstream advisories can break unrelated PRs. If that
+  # proves too noisy, remove it from check.deps (one line).
+  audit:
+    command: 'npm audit --audit-level=low'
+    deps:
+      - 'root:install'
+    inputs:
+      - '@group(configs)'
+    options:
+      cache: false
+
+  # Local-only badge refresh.
+  coverage:
+    command: 'npx make-coverage-badge --output-path ./badges/coverage.svg'
+    deps:
+      - 'root:test'
+    options:
+      cache: false
+      runInCI: false
+
+  check:
+    deps:
+      - 'root:format-check'
+      - 'root:lint'
+      - 'root:test'
+      - 'root:check-dist'
+      - 'root:audit'
+    inputs:
+      - '@group(sources)'
+      - '@group(tests)'
+      - '@group(configs)'
+      - '@group(styleConfigs)'
+      - '@group(bundleConfigs)'
+      - '@group(releaseConfig)'
+    options:
+      cache: false
+      runInCI: true

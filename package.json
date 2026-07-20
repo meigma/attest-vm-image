@@ -1,0 +1,71 @@
+{
+  "name": "template-actions",
+  "description": "Meigma template for GitHub Actions written in TypeScript",
+  "version": "0.1.0",
+  "author": "Meigma",
+  "type": "module",
+  "private": true,
+  "homepage": "https://github.com/meigma/template-actions",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/meigma/template-actions.git"
+  },
+  "bugs": {
+    "url": "https://github.com/meigma/template-actions/issues"
+  },
+  "keywords": [
+    "actions"
+  ],
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "scripts": {
+    "bundle": "npm run format:write && npm run package",
+    "check-dist": "npm run package && git diff --exit-code -- dist",
+    "ci": "npm run format:check && npm run lint && npm test && npm run check-dist && npm audit --audit-level=low",
+    "ci-test": "NODE_OPTIONS=--experimental-vm-modules NODE_NO_WARNINGS=1 npx jest",
+    "coverage": "npx make-coverage-badge --output-path ./badges/coverage.svg",
+    "format:write": "npx prettier --write .",
+    "format:check": "npx prettier --check .",
+    "lint": "npx eslint .",
+    "package": "npx rimraf ./dist && npx rollup --config rollup.config.ts --configPlugin @rollup/plugin-typescript",
+    "package:watch": "npm run package -- --watch",
+    "test": "NODE_OPTIONS=--experimental-vm-modules NODE_NO_WARNINGS=1 npx jest",
+    "all": "npm run format:write && npm run lint && npm run test && npm run coverage && npm run package"
+  },
+  "license": "(MIT OR Apache-2.0)",
+  "dependencies": {
+    "@actions/core": "^3.0.0"
+  },
+  "devDependencies": {
+    "@eslint/compat": "^2.0.2",
+    "@eslint/eslintrc": "^3.3.3",
+    "@eslint/js": "^10.0.1",
+    "@jest/globals": "^30.2.0",
+    "@rollup/plugin-commonjs": "^29.0.0",
+    "@rollup/plugin-node-resolve": "^16.0.3",
+    "@rollup/plugin-typescript": "^12.3.0",
+    "@types/jest": "^30.0.0",
+    "@types/node": "^25.2.3",
+    "@typescript-eslint/eslint-plugin": "^8.56.0",
+    "eslint": "^10.0.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-jest": "^29.15.0",
+    "eslint-plugin-prettier": "^5.5.5",
+    "jest": "^30.2.0",
+    "make-coverage-badge": "^1.2.0",
+    "prettier": "^3.8.1",
+    "rimraf": "^6.1.3",
+    "rollup": "^4.57.1",
+    "ts-jest": "^29.4.6",
+    "ts-jest-resolver": "^2.0.1",
+    "tslib": "^2.8.1",
+    "typescript": "^5.9.3"
+  },
+  "optionalDependencies": {
+    "@rollup/rollup-linux-x64-gnu": "*"
+  }
+}

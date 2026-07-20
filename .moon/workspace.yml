@@ -1,0 +1,23 @@
+# Shared Moon workspace configuration for the repository template.
+# Keep the current projects explicit, then uncomment the discovery patterns
+# below as the template grows into apps, packages, services, or tools.
+
+projects:
+  globs: []
+  sources:
+    root: '.'
+
+  # Uncomment to auto-discover more projects as the repository grows.
+  # globs:
+  #   - 'apps/*'
+  #   - 'packages/*'
+  #   - 'tools/*'
+
+defaultProject: 'root'
+
+vcs:
+  defaultBranch: 'main'
+  provider: 'github'
+
+pipeline:
+  installDependencies: false

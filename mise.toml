@@ -1,0 +1,29 @@
+# mise: tool + environment management for template-actions.
+#
+# The committed mise.lock records per-platform download URLs + checksums; for
+# aqua-backed tools it additionally carries cosign / SLSA / GitHub-attestation
+# verification. `settings.locked` makes `mise install` FAIL CLOSED when a tool
+# lacks a pre-resolved URL for the current platform.
+#
+# moon is the task runner / CI gate; it is configured (.moon/toolchains.yml +
+# moon.yml `toolchains.default: system`) to run these tools as `system` binaries
+# that mise puts on PATH.
+#
+# Bump a tool: edit its version here, then
+#   mise lock --platform linux-x64,linux-arm64,macos-x64,macos-arm64
+# and commit mise.toml + mise.lock together.
+
+[tools]
+# Node runtime (core backend). npm ships with node; no separate pin needed.
+node = "24.4.0"
+
+# Build / CI CLIs. moon itself is mise-managed (CI installs it via mise instead
+# of moonrepo/setup-toolchain). The explicit `aqua:` ref forces the VERIFYING
+# backend (checksum + cosign/SLSA/GitHub-attestation recorded in mise.lock).
+"aqua:moonrepo/moon" = "2.3.5"
+
+[settings]
+# Read/write mise.lock, and fail closed if a tool lacks a pre-resolved URL for
+# the current platform — extends integrity enforcement to every tool.
+lockfile = true
+locked = true

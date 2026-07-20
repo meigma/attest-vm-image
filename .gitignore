@@ -1,0 +1,33 @@
+# Moon
+.moon/cache/
+.moon/docker/
+
+# Agent/runtime state
+.agents/
+.claude/
+.journal/
+.wt/
+
+# Environment
+.env
+.env.*
+.envrc
+
+# mise local overrides (per-developer tool/env overrides; never committed).
+# mise.toml and mise.lock ARE committed.
+mise.local.toml
+.mise.local.toml
+
+# Node / TypeScript
+# NOTE: dist/ is deliberately NOT ignored — the bundled action (dist/index.js)
+# is committed and CI's check-dist task enforces it stays current.
+node_modules/
+npm-debug.log*
+*.tsbuildinfo
+coverage/
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+*.swp

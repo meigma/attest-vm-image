@@ -1,0 +1,7 @@
+# Toolchains for the current template.
+#
+# Tool versions (Node and moon itself) are managed by mise (mise.toml +
+# mise.lock); moon runs every task against `system` binaries that mise puts on
+# PATH, so no language toolchain is declared here. Do not enable moon's
+# javascript toolchain — dependency installation is an explicit `install` task
+# and `pipeline.installDependencies` is disabled in workspace.yml.
