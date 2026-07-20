@@ -17,3 +17,13 @@ template-actions checkout; .journal scaffold came from template-actions'
 pristine local .journal. Dependabot has already opened update branches
 (actions/cache, mise-action, @types/node, typescript).
 Plan: await the user's first concrete request for this session.
+
+## 2026-07-20 16:39 — Repo renamed to attest-vm-image
+User corrected the action name: repo renamed from incus-attest-action to
+attest-vm-image via `gh repo rename` (GitHub redirects the old URL). Local
+folder moved to ~/code/meigma/attest-vm-image, origin remote updated to
+git@github.com:meigma/attest-vm-image.git, and the journal worktree link
+repaired with `git worktree repair`. No repo files referenced the old name.
+Outstanding: template placeholders still say "template-actions" in README.md
+(title), package.json (name/homepage/repository/bugs), and
+release-please-config.json (package-name); not yet updated.
