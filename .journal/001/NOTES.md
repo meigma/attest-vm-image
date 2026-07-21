@@ -59,3 +59,12 @@ PREDICATE_TYPE, unit-tested); evidence dir default ./evidence. Plan: Phases 0-5
 that fix but dropped it from the final text). Verified both docs
 prettier-clean with the repo config (mise trusted for this checkout). Docs not
 yet committed — awaiting user direction on opening a PR.
+
+## 2026-07-20 17:58 — Docs PR opened
+Moved docs/design.md + docs/plan.md out of the main checkout into a new
+docs/design-plan worktree (.wt/docs-design-plan, based on origin/main),
+committed as "docs: add design and implementation plan", pushed, and opened
+PR #5: https://github.com/meigma/attest-vm-image/pull/5. Main checkout is
+clean again. Squash-merge with the PR title as the commit subject per repo
+convention. Next after merge: remove the worktree (wt remove docs/design-plan)
+and start plan Phase 0 (template conversion + real action interface).
