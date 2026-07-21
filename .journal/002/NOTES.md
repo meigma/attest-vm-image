@@ -130,3 +130,13 @@ Gates lens caught two builtin-policy false-positive traps on real Ubuntu:
 /var/lib/dbus/machine-id is a symlink (path-exists->non-empty-file) and
 /tmp/** matches systemd skeleton (added exclude support). 7/7 findings
 fixed; 164 tests. PR #10 opened, checks running in background.
+
+## 2026-07-20 23:45 — Phase 4 merged (PR #11), integration green first try
+Workflow wf_7e297ec6-0d2. Full signer:none pipeline wired; predicate schema
+pair landed; integration.yml built the seeded jammy image and all four cases
+(positive, non-qcow2, corrupt, threshold) passed on ubuntu-24.04 on the
+FIRST CI run (4m19s) — the empirical review pass paid off (corrupt-case dd
+retargeted from guest-data offset 1M to the qcow2 L1 table at 0x30000 after
+container verification that qemu-img check ignores guest-data damage; dpkg
+trailing-stanza separator; ELF init so arch resolves). dist/ now bundles
+the real pipeline. Phase 5 (github signer) worktree created.
