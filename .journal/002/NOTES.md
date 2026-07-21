@@ -54,3 +54,18 @@ docs/plan.md:
 moon run root:check green after prettier --write. Remaining review items
 (3 checksums/attestations wording, 5 SBOM subject digest, 6 attestation-url,
 7 arm64 note) not yet addressed. Awaiting PR merge.
+
+## 2026-07-20 19:20 — Items 3, 5, 6, 7 folded into PR #6
+Second commit (98a6370) on the same branch addresses the remaining review
+items:
+- 3: checksums.txt explicitly excludes attestations/ (stage 9 text, layout
+  comment, plan Phase 4 checksums bullet).
+- 5: sbom.ts post-processes the emitted SBOM JSON to stamp the disk digest
+  (SPDX root-element checksum / CycloneDX metadata.component hash) before
+  computing the file's own digest (design stage 5, plan Phase 3).
+- 6: attestation-url carries the validation attestation's URL; other two URLs
+  go to the workflow log (outputs table, github signer section, plan Phase 5).
+- 7: arm64 pins are best-effort — hosted arm64 runners lack KVM, TCG fallback
+  (design tool-acquisition intro).
+moon run root:check green; PR #6 body updated. All seven review findings are
+now addressed; awaiting merge, then Phase 0.
