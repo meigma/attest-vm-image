@@ -140,3 +140,18 @@ retargeted from guest-data offset 1M to the qcow2 L1 table at 0x30000 after
 container verification that qemu-img check ignores guest-data damage; dpkg
 trailing-stanza separator; ELF init so arch resolves). dist/ now bundles
 the real pipeline. Phase 5 (github signer) worktree created.
+
+## 2026-07-21 00:40 — Phase 5 merged (PR #12). v1 COMPLETE.
+Workflow wf_d5b0e089-5d2. attest-api review lens read the real
+@actions/attest 3.2.0 source and caught the launch blocker: GITHUB_TOKEN is
+NOT ambient in uses: steps — fixed with a github-token input defaulting to
+github.token (actions/attest pattern; design.md inputs table updated to 10
+inputs). Other fixes: GITHUB_SERVER_URL-derived attestation-url, SPDX
+predicateType derived from spdxVersion, dead 403/404 regex arm removed
+(octokit flattens status), fork-PR guard on sign-image job. Bundling
+@actions/attest needed inlineDynamicImports (optional kerberos import).
+PR #12 checks: ci, Kusari, build-image (integration), AND sign-image — real
+attestations pushed and gh attestation verify PASSED. Squash e49388b.
+All of plan Phases 0-5 landed as PRs #7-#12; v1 acceptance demonstrated by
+the integration workflow + 208-test unit suite. Post-v1 items: one external
+signing backend on demand; release via release-please (no release cut yet).
