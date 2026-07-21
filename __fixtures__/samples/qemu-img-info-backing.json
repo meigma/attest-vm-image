@@ -1,0 +1,31 @@
+{
+  "children": [
+    {
+      "name": "file",
+      "info": {
+        "virtual-size": 262144,
+        "filename": "overlay.qcow2",
+        "format": "file",
+        "actual-size": 200704,
+        "dirty-flag": false
+      }
+    }
+  ],
+  "virtual-size": 2147483648,
+  "filename": "overlay.qcow2",
+  "cluster-size": 65536,
+  "format": "qcow2",
+  "actual-size": 200704,
+  "backing-filename": "base.qcow2",
+  "full-backing-filename": "/images/base.qcow2",
+  "backing-filename-format": "qcow2",
+  "format-specific": {
+    "type": "qcow2",
+    "data": {
+      "compat": "1.1",
+      "refcount-bits": 16,
+      "corrupt": false
+    }
+  },
+  "dirty-flag": false
+}

@@ -1,0 +1,2 @@
+-rw-r--r-- root/root       412 2024-06-01 12:00 metadata.yaml
+truncated-garbage-line

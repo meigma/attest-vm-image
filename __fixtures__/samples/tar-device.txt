@@ -1,0 +1,3 @@
+-rw-r--r-- root/root       412 2024-06-01 12:00 metadata.yaml
+crw-rw-rw- root/root       1,3 2024-06-01 12:00 dev/null
+brw-rw---- root/root   253,100 2024-06-01 12:00 dev/nvme0n1

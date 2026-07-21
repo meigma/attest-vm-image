@@ -1,0 +1,19 @@
+{
+  "children": [
+    {
+      "name": "file",
+      "info": {
+        "virtual-size": 2147483648,
+        "filename": "disk.raw",
+        "format": "file",
+        "actual-size": 0,
+        "dirty-flag": false
+      }
+    }
+  ],
+  "virtual-size": 2147483648,
+  "filename": "disk.raw",
+  "format": "raw",
+  "actual-size": 0,
+  "dirty-flag": false
+}

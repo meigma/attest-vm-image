@@ -1,0 +1,31 @@
+{
+  "children": [
+    {
+      "name": "file",
+      "info": {
+        "virtual-size": 262144,
+        "filename": "disk.qcow2",
+        "format": "file",
+        "actual-size": 200704,
+        "dirty-flag": false
+      }
+    }
+  ],
+  "virtual-size": 2147483648,
+  "filename": "disk.qcow2",
+  "cluster-size": 65536,
+  "format": "qcow2",
+  "actual-size": 200704,
+  "format-specific": {
+    "type": "qcow2",
+    "data": {
+      "compat": "1.1",
+      "compression-type": "zlib",
+      "lazy-refcounts": false,
+      "refcount-bits": 16,
+      "corrupt": false,
+      "extended-l2": false
+    }
+  },
+  "dirty-flag": false
+}
