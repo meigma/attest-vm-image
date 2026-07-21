@@ -81,3 +81,11 @@ published site, and the relocated predicate schema remains covered by its unit
 test. Local `moon run docs:build --summary minimal`, the required
 `moon run root:check --summary minimal`, and the CI-equivalent
 `moon ci --summary minimal` all passed.
+
+## 2026-07-21 16:58 — Docs PR hosted checks passed
+
+Verified PR #18 remained pinned to reviewed commit `f889525` and became cleanly
+mergeable. All hosted checks passed: the new strict `GitHub Pages` build, CI,
+Kusari Inspector, and both real-image integration jobs (`build-image` and
+`sign-image`). The deploy job correctly skipped on the pull request and will run
+only after the change reaches main.
