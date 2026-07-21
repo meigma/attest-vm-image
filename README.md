@@ -1,105 +1,117 @@
-# template-actions
+# attest-vm-image
 
-Meigma template repository for GitHub Actions written in TypeScript.
+A GitHub Action that inspects a finished QCOW2 VM disk image and produces
+auditable evidence about what is inside it, then optionally signs that evidence.
 
-The action skeleton comes from GitHub's canonical
-[actions/typescript-action](https://github.com/actions/typescript-action)
-template (see [UPSTREAM.md](UPSTREAM.md)), rebased onto the Meigma stack:
+Run it immediately after an image build — ideally in the same job — so the exact
+bytes the builder emitted are the bytes that get inspected and attested. The
+action is independent of any one builder: it accepts a QCOW2 disk from
+Distrobuilder, mkosi, Packer, bootc/Image Builder, or anything else.
 
-- **[mise](https://mise.jdx.dev)** manages every tool (Node, moon) with a
-  committed, fail-closed `mise.lock`.
-- **[moon](https://moonrepo.dev)** is the task runner and CI gate; CI runs
-  `moon ci` against `system` binaries that mise puts on PATH.
-- **[release-please](https://github.com/googleapis/release-please)** drives
-  releases: Conventional Commits → release PR → draft release + protected
-  `vX.Y.Z` tag → human publishes → the `vN` major tag advances automatically.
-- Pinned-by-SHA workflows with `permissions: {}` defaults, weekly Dependabot,
-  dual MIT/Apache-2.0 license.
+The action **never modifies the input image**. It validates the disk structure,
+inspects the filesystem read-only inside an isolated libguestfs appliance,
+generates a Software Bill of Materials (SBOM), scans that SBOM for known
+vulnerabilities, runs contamination checks for state that should not ship in a
+reusable image, records everything in a versioned validation predicate, and
+computes immutable digests. When explicitly asked, it signs and publishes
+attestations.
 
-## Local bootstrap
+The resulting evidence lets a later system or a human reviewer establish which
+exact artifact was evaluated, what software it contained, which policy was
+applied, what passed or failed, which workflow produced the evidence, and which
+identity signed it.
 
-```sh
-mise install
+> **Status:** under active development. Inputs and outputs below describe the
+> full interface; the evidence pipeline is being implemented in phases.
+
+## Usage
+
+The default `signer: none` mode writes checksums, the SBOM, the reports, and the
+validation predicate without signing, and needs only `contents: read`.
+
+```yaml
+jobs:
+  attest:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: meigma/attest-vm-image@v0
+        with:
+          disk-path: build/disk.qcow2
+          signer: none
 ```
 
-`mise.lock` records per-platform URLs and checksums for every tool, and
-`settings.locked` makes installation fail closed when a platform lacks a
-pre-resolved entry. To bump a tool, edit its version in `mise.toml`, then:
+## Inputs
+
+| Input                 | Required | Default      | Description                                                           |
+| --------------------- | -------- | ------------ | --------------------------------------------------------------------- |
+| `disk-path`           | yes      | —            | Path to the completed QCOW2 disk image.                               |
+| `metadata-path`       | no       | _(unset)_    | Incus metadata tarball associated with the disk image.                |
+| `build-manifest-path` | no       | _(unset)_    | Builder-generated manifest with source and build information.         |
+| `output-directory`    | no       | `./evidence` | Directory the action writes evidence files into.                      |
+| `sbom-format`         | no       | `spdx-json`  | SBOM format: `spdx-json` or `cyclonedx-json`.                         |
+| `fail-on-severity`    | no       | `high`       | Vulnerability threshold: `critical`, `high`, or `none` (report-only). |
+| `policy-path`         | no       | _(built-in)_ | Contamination-policy file; the built-in policy is used when unset.    |
+| `signer`              | no       | `none`       | `none`, `github`, `sigstore-keyless`, `cosign-key`, or `kms`.         |
+| `signing-key`         | no       | _(unset)_    | Key reference required by the selected backend (never raw key bytes). |
+
+## Outputs
+
+| Output                      | Description                                                           |
+| --------------------------- | --------------------------------------------------------------------- |
+| `disk-digest`               | `sha256:<hex>` of the input QCOW2 image.                              |
+| `checksums-path`            | Path to the generated `checksums.txt`.                                |
+| `sbom-path`                 | Path to the generated SBOM.                                           |
+| `vulnerability-report-path` | Path to the machine-readable vulnerability report.                    |
+| `validation-report-path`    | Path to the human/machine-readable results summary.                   |
+| `validation-predicate-path` | Path to the in-toto validation predicate JSON.                        |
+| `attestation-bundle-path`   | Directory of signed attestation bundles, when `signer` is not `none`. |
+| `attestation-url`           | URL of the validation attestation; set for `signer: github`.          |
+
+## Verification
+
+Every evidence run writes a `sha256sum -c`-compatible `checksums.txt`:
 
 ```sh
-mise lock --platform linux-x64,linux-arm64,macos-x64,macos-arm64
+sha256sum -c evidence/checksums.txt
 ```
 
-and commit `mise.toml` + `mise.lock` together. (Note: moon's aqua package does
-not currently publish a `macos-x64` build, so Intel macOS is not covered by the
-lockfile.)
+Independent attestation verification with the GitHub CLI lands with the `github`
+signer in a later phase, alongside the required caller permissions and plan
+requirements. This section will document `gh attestation verify` once that
+signer ships.
 
-## Common tasks
+## Development
+
+Tooling is pinned by [mise](https://mise.jdx.dev) and tasks run through
+[moon](https://moonrepo.dev).
 
 ```sh
-moon run root:check       # the full CI gate: format-check, lint, test, check-dist, audit
-moon run root:format      # prettier --write
-moon run root:lint        # eslint
-moon run root:test        # jest
-moon run root:package     # rebuild dist/ (cacheable)
-moon run root:check-dist  # rebuild dist/ and fail if it differs from the committed copy
-moon ci --summary minimal # exactly what CI runs
+mise install         # provision the pinned toolchain (Node, moon)
+moon run root:check  # the full CI gate: format-check, lint, test, check-dist, audit
 ```
 
-Without moon, the equivalent npm scripts still work: `npm run ci` mirrors
-`root:check`, and `npm run all` is the upstream
-format/lint/test/coverage/package sweep.
+Useful project commands:
 
-`npm audit` runs inside `root:check`; if new upstream advisories break unrelated
-PRs too often, remove `root:audit` from `check.deps` in [moon.yml](moon.yml)
-(one line).
-
-## The sample action
-
-The template ships upstream's wait sample: input `milliseconds`, output `time`.
-Code lives in `src/`, tests in `__tests__/` with mock fixtures in
-`__fixtures__/`.
+```sh
+moon run root:format   # prettier --write
+moon run root:lint     # eslint
+moon run root:test     # jest
+moon run root:package  # rebuild dist/
+```
 
 The bundled action (`dist/index.js`) is **committed** — that is what
-`action.yml` executes. The contract: edit `src/`, run `moon run root:package`,
-commit `dist/` with your change. CI's `check-dist` task rebuilds the bundle and
-fails if the committed copy is stale.
+`action.yml` executes. After changing anything under `src/`, run
+`moon run root:package` and commit the refreshed `dist/` in the same change;
+CI's `check-dist` task rebuilds the bundle and fails if the committed copy is
+stale.
 
-## Releases
-
-1. Merge Conventional Commits to `main`; release-please maintains a release PR.
-2. Merging the release PR bumps `package.json`/`CHANGELOG.md` and creates a
-   **draft** GitHub release plus the protected `vX.Y.Z` tag.
-3. A human inspects and publishes the draft.
-4. Publication triggers the Major Version Tag workflow, which force-moves the
-   `vN` compatibility tag so `uses: meigma/<repo>@v1` consumers pick up the
-   release.
-
-Repo requirements (org-level): `vars.MEIGMA_RELEASE_APP_ID`,
-`secrets.MEIGMA_RELEASE_APP_PRIVATE_KEY`, and a protected `v*` tag ruleset with
-a bypass for the release app.
-
-If your action pins a paired CLI version in `action.yml`, add
-`"extra-files": [{ "type": "generic", "path": "action.yml" }]` to
-[release-please-config.json](release-please-config.json) and a
-`# x-release-please-version` marker on the input default so releases keep it in
-sync.
-
-## After creating a repo from this template
-
-1. `package.json`: `name`, `description`, `homepage`, `repository`, `bugs`.
-2. `action.yml`: `name`, `description`, `author`, `branding`, real
-   inputs/outputs; replace `src/` + `__tests__/` with your implementation.
-3. `release-please-config.json`: `package-name`.
-4. `moon.yml`: `project.title` / `project.description`.
-5. This README: rewrite for your action (usage example, inputs/outputs table).
-6. `SECURITY.md`: advisories URL.
-7. Pick a license posture (keep dual MIT/Apache-2.0 or trim).
-8. Repo settings: mark squash-only merges, protected `v*` tag ruleset with the
-   release-app bypass, Dependabot labels (`dependencies`, `github-actions`,
-   `javascript`).
-
-## Contributing and security
+The `audit` step runs `npm audit` at the strict `--audit-level=low` threshold
+through `scripts/audit.mjs`, which allowlists exactly one unfixable upstream
+advisory — `GHSA-jfc7-64v2-mr8c` in `@sigstore/core`, pulled transitively by the
+required `@actions/attest` dependency and marked "No fix available". Any other
+advisory, at any severity, still fails the gate.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) and [SECURITY.md](SECURITY.md).
 

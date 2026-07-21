@@ -1,6 +1,6 @@
 import * as os from 'os';
 import os__default from 'os';
-import * as crypto from 'crypto';
+import 'crypto';
 import * as fs from 'fs';
 import { promises } from 'fs';
 import 'path';
@@ -32,6 +32,7 @@ import require$$1$5 from 'node:dns';
 import require$$5$3 from 'string_decoder';
 import 'child_process';
 import 'timers';
+import * as fs$1 from 'node:fs';
 
 // We use any as a valid input type
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -152,36 +153,6 @@ function escapeProperty(s) {
         .replace(/\n/g, '%0A')
         .replace(/:/g, '%3A')
         .replace(/,/g, '%2C');
-}
-
-// For internal use, subject to change.
-// We use any as a valid input type
-/* eslint-disable @typescript-eslint/no-explicit-any */
-function issueFileCommand(command, message) {
-    const filePath = process.env[`GITHUB_${command}`];
-    if (!filePath) {
-        throw new Error(`Unable to find environment variable for file command ${command}`);
-    }
-    if (!fs.existsSync(filePath)) {
-        throw new Error(`Missing file at path: ${filePath}`);
-    }
-    fs.appendFileSync(filePath, `${toCommandValue(message)}${os.EOL}`, {
-        encoding: 'utf8'
-    });
-}
-function prepareKeyValueMessage(key, value) {
-    const delimiter = `ghadelimiter_${crypto.randomUUID()}`;
-    const convertedValue = toCommandValue(value);
-    // These should realistically never happen, but just in case someone finds a
-    // way to exploit uuid generation let's not allow keys or values that contain
-    // the delimiter.
-    if (key.includes(delimiter)) {
-        throw new Error(`Unexpected input: name should not contain the delimiter "${delimiter}"`);
-    }
-    if (convertedValue.includes(delimiter)) {
-        throw new Error(`Unexpected input: value should not contain the delimiter "${delimiter}"`);
-    }
-    return `${key}<<${delimiter}${os.EOL}${convertedValue}${os.EOL}${delimiter}`;
 }
 
 var commonjsGlobal = typeof globalThis !== 'undefined' ? globalThis : typeof window !== 'undefined' ? window : typeof global !== 'undefined' ? global : typeof self !== 'undefined' ? self : {};
@@ -28247,21 +28218,6 @@ function getInput(name, options) {
     const val = process.env[`INPUT_${name.replace(/ /g, '_').toUpperCase()}`] || '';
     return val.trim();
 }
-/**
- * Sets the value of an output.
- *
- * @param     name     name of the output to set
- * @param     value    value to store. Non-string values will be converted to a string via JSON.stringify
- */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function setOutput(name, value) {
-    const filePath = process.env['GITHUB_OUTPUT'] || '';
-    if (filePath) {
-        return issueFileCommand('OUTPUT', prepareKeyValueMessage(name, value));
-    }
-    process.stdout.write(os.EOL);
-    issueCommand('set-output', { name }, toCommandValue(value));
-}
 //-----------------------------------------------------------------------
 // Results
 //-----------------------------------------------------------------------
@@ -28275,13 +28231,6 @@ function setFailed(message) {
     error(message);
 }
 /**
- * Writes debug message to user log
- * @param message debug message
- */
-function debug(message) {
-    issueCommand('debug', {}, message);
-}
-/**
  * Adds an error issue
  * @param message error issue message. Errors will be converted to string via toString()
  * @param properties optional properties to add to the annotation.
@@ -28289,19 +28238,78 @@ function debug(message) {
 function error(message, properties = {}) {
     issueCommand('error', toCommandProperties(properties), message instanceof Error ? message.toString() : message);
 }
-
 /**
- * Waits for a number of milliseconds.
- *
- * @param milliseconds The number of milliseconds to wait.
- * @returns Resolves with 'done!' after the wait is over.
+ * Writes info to log with console.log.
+ * @param message info message
  */
-async function wait(milliseconds) {
-    return new Promise((resolve) => {
-        if (isNaN(milliseconds))
-            throw new Error('milliseconds is not a number');
-        setTimeout(() => resolve('done!'), milliseconds);
-    });
+function info(message) {
+    process.stdout.write(message + os.EOL);
+}
+
+const SIGNERS = [
+    'none',
+    'github',
+    'sigstore-keyless',
+    'cosign-key',
+    'kms'
+];
+const SBOM_FORMATS = ['spdx-json', 'cyclonedx-json'];
+const FAIL_ON_SEVERITIES = [
+    'critical',
+    'high',
+    'none'
+];
+// Backends that require a `signing-key` reference. `github` and
+// `sigstore-keyless` derive their identity from workflow OIDC and need none.
+const KEY_REFERENCE_BACKENDS = ['cosign-key', 'kms'];
+/**
+ * Read `@actions/core` inputs, apply defaults, and validate them into a typed
+ * `Inputs` object. Throws an `Error` with a specific, distinct message on the
+ * first invalid input so stage 1 can fail closed before any tool runs.
+ */
+function parseInputs() {
+    const diskPath = getInput('disk-path');
+    if (!diskPath) {
+        throw new Error('disk-path is required but was not provided.');
+    }
+    const outputDirectory = getInput('output-directory') || './evidence';
+    const sbomFormat = (getInput('sbom-format') || 'spdx-json');
+    if (!SBOM_FORMATS.includes(sbomFormat)) {
+        throw new Error(`sbom-format must be one of ${SBOM_FORMATS.join(', ')}; got "${sbomFormat}".`);
+    }
+    const failOnSeverity = (getInput('fail-on-severity') ||
+        'high');
+    if (!FAIL_ON_SEVERITIES.includes(failOnSeverity)) {
+        throw new Error(`fail-on-severity must be one of ${FAIL_ON_SEVERITIES.join(', ')}; got "${failOnSeverity}".`);
+    }
+    const signer = (getInput('signer') || 'none');
+    if (!SIGNERS.includes(signer)) {
+        throw new Error(`signer must be one of ${SIGNERS.join(', ')}; got "${signer}".`);
+    }
+    const signingKey = getInput('signing-key') || undefined;
+    if (KEY_REFERENCE_BACKENDS.includes(signer) && !signingKey) {
+        throw new Error(`signer "${signer}" requires a signing-key reference, but none was provided.`);
+    }
+    const policyPath = getInput('policy-path') || undefined;
+    if (policyPath) {
+        try {
+            fs$1.accessSync(policyPath, fs$1.constants.R_OK);
+        }
+        catch {
+            throw new Error(`policy-path "${policyPath}" does not exist or is not readable.`);
+        }
+    }
+    return {
+        diskPath,
+        metadataPath: getInput('metadata-path') || undefined,
+        buildManifestPath: getInput('build-manifest-path') || undefined,
+        outputDirectory,
+        sbomFormat,
+        failOnSeverity,
+        policyPath,
+        signer,
+        signingKey
+    };
 }
 
 /**
@@ -28311,20 +28319,17 @@ async function wait(milliseconds) {
  */
 async function run() {
     try {
-        const ms = getInput('milliseconds');
-        // Debug logs are only output if the `ACTIONS_STEP_DEBUG` secret is true
-        debug(`Waiting ${ms} milliseconds ...`);
-        // Log the current timestamp, wait, then log the new timestamp
-        debug(new Date().toTimeString());
-        await wait(parseInt(ms, 10));
-        debug(new Date().toTimeString());
-        // Set outputs for other workflow steps to use
-        setOutput('time', new Date().toTimeString());
+        const inputs = parseInputs();
+        info(`attest-vm-image: inputs parsed for disk-path "${inputs.diskPath}" ` +
+            `(signer: ${inputs.signer}). The evidence pipeline is not yet ` +
+            `implemented; this stage lands in a later phase.`);
     }
     catch (error) {
-        // Fail the workflow run if an error occurs
+        // Fail the workflow run if an error occurs.
         if (error instanceof Error)
             setFailed(error.message);
+        else
+            setFailed(String(error));
     }
 }
 
