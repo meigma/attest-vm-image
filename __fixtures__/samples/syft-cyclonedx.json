@@ -1,0 +1,40 @@
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.6",
+  "serialNumber": "urn:uuid:2c4a1f8e-1111-2222-3333-444455556666",
+  "version": 1,
+  "metadata": {
+    "timestamp": "2026-07-19T00:00:00Z",
+    "tools": {
+      "components": [
+        {
+          "type": "application",
+          "author": "anchore",
+          "name": "syft",
+          "version": "1.48.0"
+        }
+      ]
+    },
+    "component": {
+      "bom-ref": "e0f1a2b3c4d5",
+      "type": "file",
+      "name": "/mnt"
+    }
+  },
+  "components": [
+    {
+      "bom-ref": "pkg:deb/ubuntu/bash@5.2.21-2ubuntu4",
+      "type": "library",
+      "name": "bash",
+      "version": "5.2.21-2ubuntu4",
+      "purl": "pkg:deb/ubuntu/bash@5.2.21-2ubuntu4"
+    },
+    {
+      "bom-ref": "pkg:deb/ubuntu/coreutils@9.4-3ubuntu6",
+      "type": "library",
+      "name": "coreutils",
+      "version": "9.4-3ubuntu6",
+      "purl": "pkg:deb/ubuntu/coreutils@9.4-3ubuntu6"
+    }
+  ]
+}

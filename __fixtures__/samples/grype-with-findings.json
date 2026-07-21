@@ -1,0 +1,43 @@
+{
+  "matches": [
+    {
+      "vulnerability": { "id": "CVE-2024-0001", "severity": "Critical" },
+      "artifact": { "name": "bash", "version": "5.2.21-2ubuntu4" }
+    },
+    {
+      "vulnerability": { "id": "CVE-2024-0002", "severity": "high" },
+      "artifact": { "name": "openssl", "version": "3.0.13-0ubuntu3.1" }
+    },
+    {
+      "vulnerability": { "id": "CVE-2024-0003", "severity": "Medium" },
+      "artifact": { "name": "coreutils", "version": "9.4-3ubuntu6" }
+    },
+    {
+      "vulnerability": { "id": "CVE-2024-0004", "severity": "Negligible" },
+      "artifact": { "name": "base-files", "version": "13ubuntu10.2" }
+    },
+    {
+      "vulnerability": { "id": "CVE-2024-0005", "severity": "Frobnicate" },
+      "artifact": { "name": "widget", "version": "1.0" }
+    }
+  ],
+  "source": {
+    "type": "directory",
+    "target": "/mnt"
+  },
+  "descriptor": {
+    "name": "grype",
+    "version": "0.116.0",
+    "db": {
+      "status": {
+        "schemaVersion": "v6.1.9",
+        "built": "2026-07-19T01:23:45Z",
+        "path": "/home/runner/.cache/grype/db/6/vulnerability.db",
+        "valid": true
+      },
+      "providers": {
+        "nvd": { "lastSuccessfulRun": "2026-07-19T01:00:00Z" }
+      }
+    }
+  }
+}
