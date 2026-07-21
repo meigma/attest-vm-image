@@ -42,3 +42,20 @@ string form, assert presence) before spawning agents. Script fixed accordingly;
 rerun wf_337ddcaa-c86 launched and drafter prompt verified to contain the real
 spec. First-run docs stashed in session scratchpad as reference only. Repo docs
 target: docs/design.md + docs/plan.md, prettier proseWrap 80 applies.
+
+## 2026-07-20 17:53 — Design and plan docs finalized
+Rerun wf_337ddcaa-c86 completed (7 agents, ~537k tokens): docs/design.md (546
+lines) and docs/plan.md (417 lines) written in the main checkout, uncommitted.
+Design: keeps the TypeScript node24 action form (rejects the spec's composite
+suggestion, argued from the template's test/bundle/CI machinery); interface
+matches the spec verbatim (disk-path et al., signer default none, all five
+backends declared, three post-v1); tools qemu-img + guestmount via apt,
+syft/grype pinned by sha256 in src/tools.ts; predicate type URI
+https://meigma.github.io/attest-vm-image/predicate/vm-image-validation/v1 as an
+opaque identifier with in-repo schema (docs/predicate/*, $id must equal
+PREDICATE_TYPE, unit-tested); evidence dir default ./evidence. Plan: Phases 0-5
+= v1 (slices 1+2); slice 3 post-v1 behind the Signer interface. I patched Phase
+0 by hand to cover SECURITY.md's stale template-actions link (reviser logged
+that fix but dropped it from the final text). Verified both docs
+prettier-clean with the repo config (mise trusted for this checkout). Docs not
+yet committed — awaiting user direction on opening a PR.
