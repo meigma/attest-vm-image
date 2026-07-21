@@ -33,3 +33,16 @@ the imported repository variable and secret work in the workflow. The run
 created release PR #14, `chore(main): release 0.1.1`. The only annotation was a
 non-blocking deprecation warning that `actions/create-github-app-token` now
 prefers `client-id` over `app-id`.
+
+## 2026-07-21 13:46 — Dependabot backlog resolved
+
+Resolved all four outstanding Dependabot PRs sequentially. Requested
+Dependabot-owned rebases, verified each refreshed commit was signed and directly
+parented on the evolving main branch, waited for CI, Kusari, and both real-image
+integration jobs, then squash-merged exact heads: PR #1 (`jdx/mise-action`
+4.2.1) as `f056057`, PR #2 (`actions/cache` 6.1.0) as `268a7fc`, and PR #3
+(`@types/node` 26.1.1) as `d1c39dd`. Closed PR #4 (TypeScript 7.0.2) because
+the latest `@typescript-eslint` 8.65.0 peer range is `<6.1.0` and CI failed
+dependency resolution. Final main runs passed: CI `29866771080`, Integration
+`29866770161`, and Release Please `29866770839`. Verified zero open Dependabot
+PRs and fast-forwarded local main to `d1c39dd`.
