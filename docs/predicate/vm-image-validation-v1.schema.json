@@ -1,0 +1,220 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://meigma.github.io/attest-vm-image/predicate/vm-image-validation/v1",
+  "title": "attest-vm-image validation predicate (v1)",
+  "description": "Typed payload of the in-toto statement emitted by the attest-vm-image GitHub Action. Records what was inside an inspected Linux VM disk image, which policy was applied, and whether it passed.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "artifact",
+    "incusMetadata",
+    "buildManifest",
+    "tools",
+    "operatingSystem",
+    "sbom",
+    "vulnerabilities",
+    "checks",
+    "policy",
+    "result",
+    "workflow"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "description": "Predicate schema version. Always \"1\" for this schema.",
+      "const": "1"
+    },
+    "artifact": {
+      "description": "The inspected QCOW2 disk image.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "sizeBytes", "sha256"],
+      "properties": {
+        "name": {
+          "description": "Basename of the input disk path.",
+          "type": "string"
+        },
+        "sizeBytes": {
+          "description": "On-disk size of the QCOW2 file in bytes.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "sha256": {
+          "description": "SHA-256 of the input disk file, lowercase hex.",
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "incusMetadata": {
+      "description": "Digest of the Incus metadata tarball, or null when none was provided.",
+      "oneOf": [{ "$ref": "#/$defs/digestOnly" }, { "type": "null" }]
+    },
+    "buildManifest": {
+      "description": "Digest of the builder-generated manifest, or null when none was provided.",
+      "oneOf": [{ "$ref": "#/$defs/digestOnly" }, { "type": "null" }]
+    },
+    "tools": {
+      "description": "Resolved name/version pairs for every tool that produced this evidence, plus the action itself.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "version"],
+        "properties": {
+          "name": { "type": "string" },
+          "version": { "type": "string" }
+        }
+      }
+    },
+    "operatingSystem": {
+      "description": "OS identity read from the guest's /etc/os-release plus libguestfs-detected architecture.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "versionId", "prettyName", "arch"],
+      "properties": {
+        "id": { "type": "string" },
+        "versionId": { "type": "string" },
+        "prettyName": { "type": "string" },
+        "arch": { "type": "string" }
+      }
+    },
+    "sbom": {
+      "description": "The generated SBOM: its format and the digest of the written file.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["format", "sha256"],
+      "properties": {
+        "format": {
+          "description": "SBOM serialization format.",
+          "enum": ["spdx-json", "cyclonedx-json"]
+        },
+        "sha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "vulnerabilities": {
+      "description": "Vulnerability scan result: scanner identity, database version, report digest, per-severity counts, and the threshold verdict.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "scanner",
+        "dbVersion",
+        "sha256",
+        "summary",
+        "threshold",
+        "thresholdExceeded"
+      ],
+      "properties": {
+        "scanner": {
+          "description": "Scanner name (e.g. grype).",
+          "type": "string"
+        },
+        "dbVersion": {
+          "description": "Vulnerability database schema/build rendering.",
+          "type": "string"
+        },
+        "sha256": {
+          "description": "Digest of the written vulnerability report.",
+          "$ref": "#/$defs/sha256"
+        },
+        "summary": {
+          "description": "Per-severity finding counts.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "critical",
+            "high",
+            "medium",
+            "low",
+            "negligible",
+            "unknown"
+          ],
+          "properties": {
+            "critical": { "type": "integer", "minimum": 0 },
+            "high": { "type": "integer", "minimum": 0 },
+            "medium": { "type": "integer", "minimum": 0 },
+            "low": { "type": "integer", "minimum": 0 },
+            "negligible": { "type": "integer", "minimum": 0 },
+            "unknown": { "type": "integer", "minimum": 0 }
+          }
+        },
+        "threshold": {
+          "description": "The fail-on-severity threshold in effect for this run.",
+          "enum": ["critical", "high", "none"]
+        },
+        "thresholdExceeded": {
+          "description": "True when any finding met or exceeded the threshold.",
+          "type": "boolean"
+        }
+      }
+    },
+    "checks": {
+      "description": "One entry per evaluated contamination rule.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "title", "status", "detail"],
+        "properties": {
+          "id": { "type": "string" },
+          "title": { "type": "string" },
+          "status": {
+            "description": "Rule outcome.",
+            "enum": ["pass", "fail", "skip"]
+          },
+          "detail": { "type": "string" }
+        }
+      }
+    },
+    "policy": {
+      "description": "The contamination policy identity. The sha256 is present only when a custom policy-path was used; the built-in policy carries no digest.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id"],
+      "properties": {
+        "id": { "type": "string" },
+        "sha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "result": {
+      "description": "Overall verdict: fail when any check failed or the vulnerability threshold was exceeded, else pass.",
+      "enum": ["pass", "fail"]
+    },
+    "workflow": {
+      "description": "The GitHub Actions workflow context that produced this evidence.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "repository",
+        "ref",
+        "sha",
+        "runId",
+        "runAttempt",
+        "eventName",
+        "actor"
+      ],
+      "properties": {
+        "repository": { "type": "string" },
+        "ref": { "type": "string" },
+        "sha": { "type": "string" },
+        "runId": { "type": "string" },
+        "runAttempt": { "type": "string" },
+        "eventName": { "type": "string" },
+        "actor": { "type": "string" }
+      }
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "digestOnly": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sha256"],
+      "properties": {
+        "sha256": { "$ref": "#/$defs/sha256" }
+      }
+    }
+  }
+}

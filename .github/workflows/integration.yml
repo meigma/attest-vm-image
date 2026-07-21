@@ -1,0 +1,223 @@
+name: Integration
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # One job runs the shared prep (apt tools + seeded QCOW2) and then every case
+  # as a sequence of steps. Building a fresh libguestfs appliance per job is the
+  # expensive part, so keeping the cases in one job is markedly cheaper than a
+  # matrix. The action itself runs from the committed dist/ (node24), so no npm
+  # build is needed here.
+  build-image:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install libguestfs and qemu for test-image creation
+        # The action installs these itself at run time, but creating the seeded
+        # image with guestfish must happen BEFORE the action runs, so they are
+        # needed up front here too.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends qemu-utils libguestfs-tools
+          # The libguestfs direct backend's supermin appliance must read the host
+          # kernel image as the non-root runner user.
+          sudo chmod +r /boot/vmlinuz-*
+
+      - name: Create the seeded QCOW2 test image
+        env:
+          LIBGUESTFS_BACKEND: direct
+        run: |
+          .github/scripts/make-test-image.sh disk.qcow2
+          # Record the pre-run digest so we can prove the action never mutates it.
+          sha256sum disk.qcow2 | awk '{print $1}' > disk.pre.sha256
+          echo "Seeded disk digest: $(cat disk.pre.sha256)"
+
+      # ---- Positive case: report-only, must pass, full evidence --------------
+      - name: Run action (positive, report-only)
+        id: positive
+        uses: ./
+        with:
+          disk-path: disk.qcow2
+          output-directory: ./evidence-positive
+          fail-on-severity: none
+          signer: none
+
+      - name: Assert positive-case evidence and integrity
+        run: |
+          set -euo pipefail
+          dir=evidence-positive
+
+          echo "All evidence files exist"
+          for f in \
+            checksums.txt \
+            sbom.spdx.json \
+            vulnerability-report.json \
+            validation-report.json \
+            validation-predicate.json; do
+            test -f "$dir/$f" || { echo "missing $dir/$f" >&2; exit 1; }
+          done
+
+          echo "disk-digest output matches sha256sum of disk.qcow2"
+          hex="$(sha256sum disk.qcow2 | awk '{print $1}')"
+          expected="sha256:${hex}"
+          got='${{ steps.positive.outputs.disk-digest }}'
+          test "$got" = "$expected" || {
+            echo "disk-digest mismatch: got '$got' want '$expected'" >&2
+            exit 1
+          }
+
+          echo "The input disk is byte-identical after the run"
+          test "$hex" = "$(cat disk.pre.sha256)"
+
+          echo "Predicate subject and artifact carry the input digest"
+          jq -e --arg d "$hex" '.subject[0].digest.sha256 == $d' \
+            "$dir/validation-predicate.json" >/dev/null
+          jq -e --arg d "$hex" '.predicate.artifact.sha256 == $d' \
+            "$dir/validation-predicate.json" >/dev/null
+
+          echo "The SBOM embeds the input digest as its subject"
+          jq -e --arg d "$hex" \
+            '[.. | .checksumValue? // empty, .content? // empty] | any(. == $d)' \
+            "$dir/sbom.spdx.json" >/dev/null
+
+          echo "The validation report carries the input digest and references the reports"
+          jq -e --arg d "$hex" '.artifact.sha256 == $d' \
+            "$dir/validation-report.json" >/dev/null
+
+          echo "Predicate has the expected basic shape and passed"
+          jq -e '.predicate.schemaVersion == "1"' \
+            "$dir/validation-predicate.json" >/dev/null
+          jq -e '.predicateType | startswith("https://meigma.github.io/")' \
+            "$dir/validation-predicate.json" >/dev/null
+          jq -e '.predicate.result == "pass"' \
+            "$dir/validation-predicate.json" >/dev/null
+          jq -e '.predicate.operatingSystem.id == "ubuntu"' \
+            "$dir/validation-predicate.json" >/dev/null
+          jq -e '(.predicate.tools | length) > 0' \
+            "$dir/validation-predicate.json" >/dev/null
+
+          echo "checksums.txt verifies from the workspace root"
+          sha256sum -c "$dir/checksums.txt"
+
+      # ---- Negative case: non-QCOW2 input must abort with no evidence --------
+      - name: Create a non-QCOW2 (raw) input
+        run: dd if=/dev/zero of=raw.img bs=1M count=1
+
+      - name: Run action (non-QCOW2, must fail)
+        id: non_qcow2
+        continue-on-error: true
+        uses: ./
+        with:
+          disk-path: raw.img
+          output-directory: ./evidence-nonqcow2
+          fail-on-severity: none
+          signer: none
+
+      - name: Assert non-QCOW2 aborted before any evidence
+        run: |
+          set -euo pipefail
+          test '${{ steps.non_qcow2.outcome }}' = 'failure' || {
+            echo "expected the non-QCOW2 run to fail" >&2
+            exit 1
+          }
+          # A fail-closed abort emits no evidence; the directory must not exist
+          # (or must be empty if the action created it before aborting).
+          if [ -d evidence-nonqcow2 ]; then
+            test -z "$(ls -A evidence-nonqcow2)" || {
+              echo "non-QCOW2 abort left evidence behind" >&2
+              ls -A evidence-nonqcow2 >&2
+              exit 1
+            }
+          fi
+
+      # ---- Negative case: corrupt QCOW2 must abort --------------------------
+      - name: Create a corrupt QCOW2
+        run: |
+          cp disk.qcow2 corrupt.qcow2
+          # Overwrite the qcow2 L1 table cluster at host offset 0x30000
+          # (3 * 64K). This is real qcow2 structural metadata, so
+          # `qemu-img check` reports corruptions and exits non-zero, which is
+          # exactly the integrity path src/disk.ts validateDisk must abort on.
+          # Corrupting a guest data cluster instead (e.g. seek=16, offset 1M)
+          # leaves qcow2 metadata intact and only breaks the ext4 later, so it
+          # would not exercise the qemu-img-check branch at all.
+          dd if=/dev/urandom of=corrupt.qcow2 bs=64K count=1 seek=3 conv=notrunc
+
+      - name: Run action (corrupt, must fail)
+        id: corrupt
+        continue-on-error: true
+        uses: ./
+        with:
+          disk-path: corrupt.qcow2
+          output-directory: ./evidence-corrupt
+          fail-on-severity: none
+          signer: none
+
+      - name: Assert corrupt input aborted
+        run: |
+          set -euo pipefail
+          test '${{ steps.corrupt.outcome }}' = 'failure' || {
+            echo "expected the corrupt run to fail" >&2
+            exit 1
+          }
+
+      # ---- Threshold case: seeded HIGH CVE fails, but evidence is complete ---
+      - name: Run action (threshold breach, must fail)
+        id: threshold
+        continue-on-error: true
+        uses: ./
+        with:
+          disk-path: disk.qcow2
+          output-directory: ./evidence-threshold
+          fail-on-severity: high
+          signer: none
+
+      - name: Assert threshold breach produced complete failing evidence
+        run: |
+          set -euo pipefail
+          dir=evidence-threshold
+
+          test '${{ steps.threshold.outcome }}' = 'failure' || {
+            echo "expected the threshold run to fail" >&2
+            exit 1
+          }
+
+          echo "Evidence exists despite the failure"
+          for f in \
+            checksums.txt \
+            sbom.spdx.json \
+            vulnerability-report.json \
+            validation-report.json \
+            validation-predicate.json; do
+            test -f "$dir/$f" || { echo "missing $dir/$f" >&2; exit 1; }
+          done
+
+          echo "The predicate records the failure and the breach"
+          jq -e '.predicate.result == "fail"' \
+            "$dir/validation-predicate.json" >/dev/null
+          jq -e '.predicate.vulnerabilities.thresholdExceeded == true' \
+            "$dir/validation-predicate.json" >/dev/null
+          jq -e '.predicate.vulnerabilities.threshold == "high"' \
+            "$dir/validation-predicate.json" >/dev/null
+
+          echo "checksums.txt still verifies"
+          sha256sum -c "$dir/checksums.txt"
