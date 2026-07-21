@@ -145,7 +145,7 @@ consumer's policy choice, not a per-CVE judgement by the action.
 | `validation-report-path`    | Path to the human/machine-readable results summary.                   |
 | `validation-predicate-path` | Path to the in-toto validation predicate JSON.                        |
 | `attestation-bundle-path`   | Directory of signed attestation bundles, when `signer` is not `none`. |
-| `attestation-url`           | URL/identifier from the backend; always set for `signer: github`.     |
+| `attestation-url`           | URL of the validation attestation; always set for `signer: github`.   |
 
 ## Pipeline
 
@@ -193,8 +193,12 @@ on a shared `state` object (see
 5. **Generate the SBOM** (`src/sbom.ts`). Run Syft against `fsView.mountPath`
    (the mounted image filesystem, a directory source — not the source repo) and
    emit `spdx-json` or `cyclonedx-json`. The SBOM records the QCOW2 sha256 as
-   its subject. Returns `{ path, format, sha256 }`. _Fails when_ Syft errors or
-   produces no components.
+   its subject; Syft's directory source cannot stamp an arbitrary subject digest
+   itself, so `sbom.ts` post-processes the emitted document to insert it (SPDX:
+   a checksum on the described root element; CycloneDX: a hash on
+   `metadata.component`) before the SBOM file's own digest is computed. Returns
+   `{ path, format, sha256 }`. _Fails when_ Syft errors or produces no
+   components.
 
 6. **Scan for vulnerabilities** (`src/vuln.ts`). Run Grype against the generated
    SBOM, record scanner and vulnerability-database versions, and compare the
@@ -219,30 +223,37 @@ on a shared `state` object (see
 
 9. **Compute checksums** (`src/checksums.ts`). Write a `sha256sum`-compatible
    `checksums.txt` covering the disk, optional metadata and build manifest, and
-   every evidence file. Re-digest the input disk and assert it equals
-   `state.disk.sha256` from stage 2. _Fails when_ the input digest changed.
+   every unsigned evidence file. Attestation bundles are **not** covered: they
+   are written by stage 10 after `checksums.txt` is sealed, and Sigstore bundles
+   carry their own verification material. Re-digest the input disk and assert it
+   equals `state.disk.sha256` from stage 2. _Fails when_ the input digest
+   changed.
 
-10. **Sign** (`src/sign/*`), only when `signer` is not `none`. Produce build
-    provenance, an SBOM attestation, and a custom validation attestation, and
-    write bundles into `attestations/`. _Fails when_ the backend's prerequisites
-    are missing; it never falls back to another backend.
+10. **Sign** (`src/sign/*`), only when `signer` is not `none` **and** the
+    predicate's `result` is `pass`. Produce build provenance, an SBOM
+    attestation, and a custom validation attestation, and write bundles into
+    `attestations/`. _Fails when_ the backend's prerequisites are missing; it
+    never falls back to another backend.
 
 A threshold breach (stage 6) or any failing contamination check (stage 7)
 produces **complete** evidence, sets `result: "fail"` in the predicate, and
 fails the action after evidence is written — distinct from the fail-closed
-aborts, which stop before evidence exists.
+aborts, which stop before evidence exists. A failing result is never signed:
+stage 10 is skipped when `result` is `fail`, so attestations are only ever
+issued for images that passed validation. The unsigned evidence — including the
+predicate recording the failure — is still written in full for audit.
 
 ## Evidence output layout
 
 Written under `output-directory` (default `./evidence`):
 
 ```text
-checksums.txt                 # sha256sum -c compatible; covers all files below + inputs
+checksums.txt                 # sha256sum -c compatible; covers inputs + all unsigned evidence below (not attestations/)
 sbom.spdx.json                # or sbom.cyclonedx.json, per sbom-format
 vulnerability-report.json     # Grype JSON, with scanner + DB versions
 validation-report.json        # human/machine summary of every check
 validation-predicate.json     # in-toto statement wrapping the validation predicate
-attestations/                 # only when signer != none
+attestations/                 # only when signer != none and result is pass
   provenance.sigstore.json    # build-provenance attestation bundle
   sbom.sigstore.json          # SBOM attestation bundle
   validation.sigstore.json    # custom validation attestation bundle
@@ -258,7 +269,10 @@ and digest.
 The action shells out to four external tools. mise pins only the **development**
 toolchain — it is not present on a consumer's runner — so the action must
 acquire and integrity-verify these tools itself at run time. Primary target is
-GitHub-hosted `ubuntu-24.04`.
+GitHub-hosted `ubuntu-24.04` (x64). Tool pins also carry `linux-arm64` digests,
+but GitHub-hosted arm64 runners expose no KVM, so the libguestfs appliance falls
+back to TCG software emulation there — functional but much slower; arm64 is
+best-effort, x64 is the supported target.
 
 | Tool               | Purpose                         | Acquisition on the runner                                                    |
 | ------------------ | ------------------------------- | ---------------------------------------------------------------------------- |
@@ -276,6 +290,14 @@ the predicate after the fact. It fails if the install fails. libguestfs runs its
 filesystem drivers inside a lightweight isolated appliance (direct backend,
 using the KVM available on GitHub-hosted Linux runners) rather than mounting the
 untrusted filesystem into the host kernel.
+
+One runner-specific fixup is required: the direct backend builds its appliance
+with supermin, which must read the host kernel image, and Ubuntu ships
+`/boot/vmlinuz-*` readable only by root while the action runs as the non-root
+`runner` user. After installing the apt packages, tool setup runs
+`sudo chmod +r /boot/vmlinuz-*` and fails closed if no readable kernel remains —
+otherwise the first `guestmount` would fail with supermin's unreadable-kernel
+error.
 
 **Standalone binaries** (`syft`, `grype`) are pinned in `src/tools.ts` by exact
 version and per-platform SHA-256 digest. `@actions/tool-cache` downloads the
@@ -429,14 +451,17 @@ attestations:
 
 The `github` signer **always** pushes the attestations to GitHub's attestation
 API, so `attestation-url` is always set when it succeeds; the same bundles are
-also written to `attestations/`. The caller must grant `id-token: write`,
-`attestations: write`, and `contents: read` — the action cannot grant these
-itself. Private and internal repositories require GitHub Enterprise Cloud;
-**GitHub Enterprise Server is unsupported**. Plan support is detected
-**reactively**: the action calls `@actions/attest` and, if the API rejects the
-call because the repository plan cannot issue attestations, catches that
-specific error and re-throws a diagnostic naming the missing capability. It does
-not pre-probe the plan and it never silently downgrades.
+also written to `attestations/`. Because one output cannot carry three URLs,
+`attestation-url` carries the **validation** attestation's URL — the run's
+primary claim; the provenance and SBOM attestation URLs are printed in the
+workflow log and all three bundles sit in `attestation-bundle-path`. The caller
+must grant `id-token: write`, `attestations: write`, and `contents: read` — the
+action cannot grant these itself. Private and internal repositories require
+GitHub Enterprise Cloud; **GitHub Enterprise Server is unsupported**. Plan
+support is detected **reactively**: the action calls `@actions/attest` and, if
+the API rejects the call because the repository plan cannot issue attestations,
+catches that specific error and re-throws a diagnostic naming the missing
+capability. It does not pre-probe the plan and it never silently downgrades.
 
 ### `sigstore-keyless`, `cosign-key`, `kms` (post-v1 extension points)
 
@@ -532,13 +557,22 @@ another.
 **Integration tests** exercise the pieces that need real tools, real KVM, and a
 real disk, which cannot run under Jest. A workflow at
 `.github/workflows/integration.yml` on `ubuntu-24.04` generates a tiny QCOW2 at
-test time (`qemu-img create` plus a small mkfs/populate via guestfish), runs the
-built action with `signer: none`, and asserts that the SBOM, vulnerability
-report, checksums, and predicate exist, that every report carries the input
-digest, and that the input disk is byte-identical afterward. Negative jobs
-confirm a corrupt or non-QCOW2 input fails clearly and that a threshold breach
-fails the run. A separate opt-in job covers `signer: github` where the repo plan
-allows it.
+test time and runs the built action with `signer: none`. Because the pipeline
+fails closed on an image it cannot inspect, the test image cannot be a bare mkfs
+filesystem: `qemu-img create` plus guestfish must populate an ext4 root that
+libguestfs OS inspection recognizes — a minimal Debian-style layout with
+`/etc/os-release`, the usual top-level directories, and a small dpkg database
+(`/var/lib/dpkg/status`) listing a handful of packages. Otherwise stage 3
+(package inventory) and stage 5 (zero-component SBOM) would abort by design. The
+seeded package list includes at least one old package version with known
+high/critical CVEs so the threshold-breach job scans real findings. The positive
+job runs report-only (`fail-on-severity: none`) so those seeded findings do not
+fail it, and asserts that the SBOM, vulnerability report, checksums, and
+predicate exist, that every report carries the input digest, and that the input
+disk is byte-identical afterward. Negative jobs confirm a corrupt or non-QCOW2
+input fails clearly and that the seeded high-severity finding under
+`fail-on-severity: high` fails the run. A separate opt-in job covers
+`signer: github` where the repo plan allows it.
 
 **CI gate.** Whenever `src/` changes, run `moon run root:package` and commit the
 refreshed `dist/` in the same change. `moon run root:check` (format-check, lint,
