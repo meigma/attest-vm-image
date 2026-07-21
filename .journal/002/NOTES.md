@@ -38,3 +38,19 @@ Findings, by severity:
 7. arm64 pins present but hosted arm64 runners lack KVM (TCG fallback, slow).
 Next: report to user; likely follow-up is a small docs PR amending plan
 Phase 4 (+design tool-acquisition note) before Phase 0 starts.
+
+## 2026-07-20 19:05 — Docs PR for review items 1, 2 (+ sign-on-fail decision)
+User decided: never sign when result is "fail". Opened PR #6
+(docs/integration-image-libguestfs branch) amending docs/design.md and
+docs/plan.md:
+- Phase 4 / testing strategy: integration image must be an inspectable
+  minimal Debian-style root (/etc/os-release, dpkg status DB with one old
+  CVE-bearing package); positive job runs fail-on-severity: none.
+- Phase 1 / tool acquisition: ensureAptPackages() chmods /boot/vmlinuz-*
+  readable after install (supermin needs it as non-root), fails closed;
+  tools.test.ts asserts it.
+- Stage 10 / Phase 5: signing skipped when result is "fail"; main.test.ts
+  gains a no-sign-on-fail case; evidence layout comment updated.
+moon run root:check green after prettier --write. Remaining review items
+(3 checksums/attestations wording, 5 SBOM subject digest, 6 attestation-url,
+7 arm64 note) not yet addressed. Awaiting PR merge.
