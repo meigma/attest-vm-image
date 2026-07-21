@@ -13,3 +13,13 @@ release work includes evaluating the private-plan diagnostic defect and proving
 the initial release plus its released major-version tag.
 Plan: Inspect the live release state, address concrete release blockers, then
 exercise and verify the smallest complete first-release path.
+
+## 2026-07-21 11:32 — Release App credentials imported
+
+Confirmed the release workflows require repository variable
+`MEIGMA_RELEASE_APP_ID` and repository secret
+`MEIGMA_RELEASE_APP_PRIVATE_KEY`. Read the numeric `app_id` field and PEM
+`key.pem` attachment from the `meigma-release-please` item in the `Meigma`
+1Password vault, set both on `meigma/attest-vm-image` with `gh`, and verified
+their GitHub metadata showed fresh update timestamps. No secret values were
+printed or written to the workspace.
