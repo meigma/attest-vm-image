@@ -19,6 +19,8 @@ export default [
     ignores: [
       '**/coverage',
       '**/dist',
+      'docs/.venv',
+      'docs/build',
       '**/linter',
       '**/node_modules',
       // Transient compiled rollup config (rollup.config-<timestamp>.mjs):

@@ -36982,7 +36982,8 @@ const STATEMENT_TYPE = 'https://in-toto.io/Statement/v1';
 /**
  * This action's own predicate type: a project-owned, versioned, opaque
  * identifier. It is not a live endpoint; the schema is documented in-repo under
- * `docs/predicate/`, and `docs/predicate/vm-image-validation-v1.schema.json`
+ * `docs/docs/predicate/`, and
+ * `docs/docs/predicate/vm-image-validation-v1.schema.json`
  * carries this exact string as its `$id` (asserted by a unit test).
  */
 const PREDICATE_TYPE = 'https://meigma.github.io/attest-vm-image/predicate/vm-image-validation/v1';

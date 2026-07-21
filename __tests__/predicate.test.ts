@@ -235,7 +235,7 @@ describe('predicate.ts', () => {
     it('string-equals the schema file $id', () => {
       const schema = JSON.parse(
         readFileSync(
-          'docs/predicate/vm-image-validation-v1.schema.json',
+          'docs/docs/predicate/vm-image-validation-v1.schema.json',
           'utf8'
         )
       )

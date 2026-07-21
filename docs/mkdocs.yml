@@ -1,0 +1,66 @@
+site_name: attest-vm-image
+site_description: Inspect QCOW2 VM images and produce signed validation evidence
+site_url: https://meigma.github.io/attest-vm-image/
+repo_name: meigma/attest-vm-image
+repo_url: https://github.com/meigma/attest-vm-image
+edit_uri: edit/main/docs/docs/
+docs_dir: docs
+site_dir: build
+strict: true
+
+theme:
+  name: material
+  language: en
+  features:
+    - content.action.edit
+    - navigation.instant
+    - navigation.tracking
+    - search.highlight
+    - search.suggest
+  palette:
+    - media: '(prefers-color-scheme: light)'
+      scheme: default
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: '(prefers-color-scheme: dark)'
+      scheme: slate
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+
+nav:
+  - Home: index.md
+  - Tutorial:
+      - Getting started: getting-started.md
+  - How-to guides:
+      - Publish signed attestations: signing.md
+      - Verify evidence and attestations: verification.md
+      - Control validation policy: validation-policy.md
+      - Troubleshoot a failed run: troubleshooting.md
+  - Reference:
+      - Action reference: reference.md
+      - Validation predicate: predicate/vm-image-validation-v1.md
+  - Explanation:
+      - How it works: how-it-works.md
+
+plugins:
+  - search
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.superfences
+
+extra_css:
+  - stylesheets/palette.css
