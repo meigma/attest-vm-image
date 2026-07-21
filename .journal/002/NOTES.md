@@ -69,3 +69,10 @@ items:
   (design tool-acquisition intro).
 moon run root:check green; PR #6 body updated. All seven review findings are
 now addressed; awaiting merge, then Phase 0.
+
+## 2026-07-20 19:25 — PR #6 merged
+Checks (ci, Kusari Inspector) green; squash-merged as 04705d4 on main. Local
+main fast-forwarded; docs/integration-image-libguestfs worktree and branch
+removed. All seven review findings from this session are now landed in
+docs/design.md and docs/plan.md. Next step: plan Phase 0 (template
+conversion).
