@@ -117,17 +117,18 @@ New runtime dependencies (`@actions/exec`, `@actions/tool-cache`,
 
 ### Inputs
 
-| Input                 | Required | Default      | Description                                                               |
-| --------------------- | -------- | ------------ | ------------------------------------------------------------------------- |
-| `disk-path`           | yes      | —            | Path to the completed QCOW2 disk image.                                   |
-| `metadata-path`       | no       | _(unset)_    | Incus metadata tarball associated with the disk.                          |
-| `build-manifest-path` | no       | _(unset)_    | Builder-generated manifest with source and build information.             |
-| `output-directory`    | no       | `./evidence` | Directory the action writes evidence files into.                          |
-| `sbom-format`         | no       | `spdx-json`  | `spdx-json` or `cyclonedx-json`.                                          |
-| `fail-on-severity`    | no       | `high`       | Vulnerability threshold: `critical`, `high`, or `none` (report-only).     |
-| `policy-path`         | no       | _(built-in)_ | Contamination-policy file; built-in policy used when unset.               |
-| `signer`              | no       | `none`       | `none`, `github`, `sigstore-keyless`, `cosign-key`, or `kms`.             |
-| `signing-key`         | no       | _(unset)_    | Key **reference** required by the selected backend (never raw key bytes). |
+| Input                 | Required | Default        | Description                                                               |
+| --------------------- | -------- | -------------- | ------------------------------------------------------------------------- |
+| `disk-path`           | yes      | —              | Path to the completed QCOW2 disk image.                                   |
+| `metadata-path`       | no       | _(unset)_      | Incus metadata tarball associated with the disk.                          |
+| `build-manifest-path` | no       | _(unset)_      | Builder-generated manifest with source and build information.             |
+| `output-directory`    | no       | `./evidence`   | Directory the action writes evidence files into.                          |
+| `sbom-format`         | no       | `spdx-json`    | `spdx-json` or `cyclonedx-json`.                                          |
+| `fail-on-severity`    | no       | `high`         | Vulnerability threshold: `critical`, `high`, or `none` (report-only).     |
+| `policy-path`         | no       | _(built-in)_   | Contamination-policy file; built-in policy used when unset.               |
+| `signer`              | no       | `none`         | `none`, `github`, `sigstore-keyless`, `cosign-key`, or `kms`.             |
+| `signing-key`         | no       | _(unset)_      | Key **reference** required by the selected backend (never raw key bytes). |
+| `github-token`        | no       | `github.token` | Token the `github` signer uses to push attestations to GitHub's API.      |
 
 Defaults are conservative: `signer` defaults to `none` and never to an automatic
 backend. `fail-on-severity` defaults to `high` (fails on high and critical
@@ -456,12 +457,16 @@ also written to `attestations/`. Because one output cannot carry three URLs,
 primary claim; the provenance and SBOM attestation URLs are printed in the
 workflow log and all three bundles sit in `attestation-bundle-path`. The caller
 must grant `id-token: write`, `attestations: write`, and `contents: read` — the
-action cannot grant these itself. Private and internal repositories require
-GitHub Enterprise Cloud; **GitHub Enterprise Server is unsupported**. Plan
-support is detected **reactively**: the action calls `@actions/attest` and, if
-the API rejects the call because the repository plan cannot issue attestations,
-catches that specific error and re-throws a diagnostic naming the missing
-capability. It does not pre-probe the plan and it never silently downgrades.
+action cannot grant these itself. The attestation-API push authenticates with
+the `github-token` input, which defaults to the workflow's `github.token`
+(`GITHUB_TOKEN` is not ambient in a `uses:` step's environment, so it is an
+explicit input, the same pattern `actions/attest` uses). Private and internal
+repositories require GitHub Enterprise Cloud; **GitHub Enterprise Server is
+unsupported**. Plan support is detected **reactively**: the action calls
+`@actions/attest` and, if the API rejects the call because the repository plan
+cannot issue attestations, catches that specific error and re-throws a
+diagnostic naming the missing capability. It does not pre-probe the plan and it
+never silently downgrades.
 
 ### `sigstore-keyless`, `cosign-key`, `kms` (post-v1 extension points)
 

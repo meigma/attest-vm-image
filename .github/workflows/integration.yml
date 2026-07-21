@@ -221,3 +221,76 @@ jobs:
 
           echo "checksums.txt still verifies"
           sha256sum -c "$dir/checksums.txt"
+
+  # Opt-in signing integration: exercises signer: github end to end and verifies
+  # the published attestations with the GitHub CLI. Attestations can only be
+  # issued where the repository plan allows it. This repository is PUBLIC, so the
+  # job is guarded on public visibility and is SKIPPED (not failed) anywhere
+  # issuance is impossible — a private fork, or a private mirror on a plan
+  # without Enterprise Cloud. Fork pull requests receive a read-only token and no
+  # OIDC, so this job is only meaningful for same-repository runs.
+  sign-image:
+    if: >-
+      ${{ github.event.repository.private == false && (github.event_name !=
+      'pull_request' || github.event.pull_request.head.repo.full_name ==
+      github.repository) }}
+    runs-on: ubuntu-24.04
+    permissions:
+      id-token: write # mint the OIDC token that identifies the signer
+      attestations: write # publish attestations to the repository
+      contents: read # read the workspace
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install libguestfs and qemu for test-image creation
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends qemu-utils libguestfs-tools
+          sudo chmod +r /boot/vmlinuz-*
+
+      - name: Create the seeded QCOW2 test image
+        env:
+          LIBGUESTFS_BACKEND: direct
+        run: .github/scripts/make-test-image.sh disk.qcow2
+
+      # signer: github pushes attestations using the github-token input, which
+      # defaults to ${{ github.token }} (carrying attestations: write), so no env
+      # export is needed here. fail-on-severity: none keeps the seeded CVEs from
+      # failing the run, so the result is "pass" and signing actually happens.
+      - name: Run action (signer github, report-only)
+        id: sign
+        uses: ./
+        with:
+          disk-path: disk.qcow2
+          output-directory: ./evidence-signed
+          fail-on-severity: none
+          signer: github
+
+      - name: Assert the three bundles exist and attestation-url is set
+        run: |
+          set -euo pipefail
+          dir=evidence-signed/attestations
+          for f in \
+            provenance.sigstore.json \
+            sbom.sigstore.json \
+            validation.sigstore.json; do
+            test -f "$dir/$f" || { echo "missing $dir/$f" >&2; exit 1; }
+          done
+
+          url='${{ steps.sign.outputs.attestation-url }}'
+          test -n "$url" || { echo "attestation-url output was empty" >&2; exit 1; }
+          echo "validation attestation: $url"
+
+          bundle='${{ steps.sign.outputs.attestation-bundle-path }}'
+          test "$bundle" = "evidence-signed/attestations" || {
+            echo "attestation-bundle-path was '$bundle'" >&2
+            exit 1
+          }
+
+      - name: Verify the attestation with the GitHub CLI
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh attestation verify disk.qcow2 --repo ${{ github.repository }}

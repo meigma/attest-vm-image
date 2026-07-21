@@ -128,6 +128,20 @@ class CleanupRegistry {
   drain = drain
 }
 
+// Signer dispatch: selectSigner returns null for "none" and a mock signer for
+// any other backend; the mock signer records its invocation so the fail-path
+// (never signed) can be asserted.
+const sign = jest.fn(async () => {
+  calls.push('sign')
+  return {
+    bundleDir: '/evidence/attestations',
+    attestationUrl: 'https://github.com/meigma/attest-vm-image/attestations/42'
+  }
+})
+const selectSigner = jest.fn((inputs: Inputs) =>
+  inputs.signer === 'none' ? null : { sign }
+)
+
 const mkdir = jest.fn(async () => {
   calls.push('mkdir')
   return undefined
@@ -154,6 +168,7 @@ jest.unstable_mockModule('../src/context.js', () => ({ workflowContext }))
 jest.unstable_mockModule('../src/predicate.js', () => ({ writeEvidence }))
 jest.unstable_mockModule('../src/checksums.js', () => ({ writeChecksums }))
 jest.unstable_mockModule('../src/cleanup.js', () => ({ CleanupRegistry }))
+jest.unstable_mockModule('../src/sign/index.js', () => ({ selectSigner }))
 jest.unstable_mockModule('node:fs', () => ({
   promises: { mkdir }
 }))
@@ -169,6 +184,7 @@ function baseInputs(overrides: Partial<Inputs> = {}): Inputs {
     sbomFormat: 'spdx-json',
     failOnSeverity: 'high',
     signer: 'none',
+    githubToken: '',
     ...overrides
   }
 }
@@ -333,6 +349,52 @@ describe('main.ts orchestration', () => {
     expect(core.info).toHaveBeenCalledWith(
       expect.stringContaining('signer is "none"')
     )
+    expect(selectSigner).not.toHaveBeenCalled()
+    expect(sign).not.toHaveBeenCalled()
+  })
+
+  it('invokes the signer and sets attestation outputs for signer:github on a pass', async () => {
+    parseInputs.mockReturnValue(baseInputs({ signer: 'github' }))
+
+    await run()
+
+    expect(selectSigner).toHaveBeenCalledTimes(1)
+    expect(sign).toHaveBeenCalledTimes(1)
+    // Signing happens after checksums are sealed (stage 10 after stage 9).
+    expect(calls.indexOf('sign')).toBeGreaterThan(
+      calls.indexOf('writeChecksums')
+    )
+    expect(core.setOutput).toHaveBeenCalledWith(
+      'attestation-bundle-path',
+      '/evidence/attestations'
+    )
+    expect(core.setOutput).toHaveBeenCalledWith(
+      'attestation-url',
+      'https://github.com/meigma/attest-vm-image/attestations/42'
+    )
+    expect(core.setFailed).not.toHaveBeenCalled()
+  })
+
+  it('never signs a failing result, logs a skip notice, and still fails evidence-complete for signer:github', async () => {
+    parseInputs.mockReturnValue(baseInputs({ signer: 'github' }))
+    vulnResult = { ...vulnResult, thresholdExceeded: true }
+    evidenceResult = 'fail'
+
+    await run()
+
+    // A failing result is never signed.
+    expect(selectSigner).not.toHaveBeenCalled()
+    expect(sign).not.toHaveBeenCalled()
+    expect(core.info).toHaveBeenCalledWith(
+      expect.stringContaining('a failing result is never signed')
+    )
+    // No attestation outputs were set.
+    expect(outputNames()).not.toContain('attestation-bundle-path')
+    expect(outputNames()).not.toContain('attestation-url')
+    // The evidence-complete failure still fires.
+    const msg = core.setFailed.mock.calls[0][0] as string
+    expect(msg).toMatch(/complete evidence was written/)
+    expect(drain).toHaveBeenCalledTimes(1)
   })
 
   it('fails the run and still drains when parseInputs throws', async () => {

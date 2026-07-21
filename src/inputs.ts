@@ -22,6 +22,13 @@ export interface Inputs {
   policyPath?: string
   signer: Signer
   signingKey?: string
+  /**
+   * GitHub API token used by `signer: github` to push attestations. Sourced
+   * from the `github-token` input, which defaults to the job's
+   * `${{ github.token }}`; empty when unset. Never assume an ambient
+   * `GITHUB_TOKEN` env var — the runner does not inject one for `uses: ./`.
+   */
+  githubToken: string
 }
 
 const SIGNERS: readonly Signer[] = [
@@ -106,6 +113,7 @@ export function parseInputs(): Inputs {
     failOnSeverity,
     policyPath,
     signer,
-    signingKey
+    signingKey,
+    githubToken: core.getInput('github-token')
   }
 }
