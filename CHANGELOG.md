@@ -1,1 +1,20 @@
 # Changelog
+
+## [0.1.1](https://github.com/meigma/attest-vm-image/compare/v0.1.0...v0.1.1) (2026-07-21)
+
+
+### Features
+
+* add disk validation, filesystem inspection, and metadata checks ([#9](https://github.com/meigma/attest-vm-image/issues/9)) ([48c5a10](https://github.com/meigma/attest-vm-image/commit/48c5a1087eeef86e459592ab5c7d239dd7103ed4))
+* add github signer via actions/attest (completes v1) ([#12](https://github.com/meigma/attest-vm-image/issues/12)) ([e49388b](https://github.com/meigma/attest-vm-image/commit/e49388b52d8912801515bcc86c862901b4037087))
+* add runtime foundation (exec, tools, hash, cleanup, context) ([#8](https://github.com/meigma/attest-vm-image/issues/8)) ([6c7f497](https://github.com/meigma/attest-vm-image/commit/6c7f497433d6099706f12629ccbbcee43e821d06))
+* add SBOM generation, vulnerability scan, and contamination checks ([#10](https://github.com/meigma/attest-vm-image/issues/10)) ([6d48fa4](https://github.com/meigma/attest-vm-image/commit/6d48fa47e7314c675baacb19f02fa8048cf7a8f6))
+* assemble predicate, checksums, and the signer-none pipeline ([#11](https://github.com/meigma/attest-vm-image/issues/11)) ([962ef5d](https://github.com/meigma/attest-vm-image/commit/962ef5d94497d53df2ff065573bb1cb8945791dc))
+* convert template to attest-vm-image action interface ([#7](https://github.com/meigma/attest-vm-image/issues/7)) ([60063ec](https://github.com/meigma/attest-vm-image/commit/60063ec2e3056b3c83bac734ccd331031bcc1e8e))
+
+
+### Bug Fixes
+
+* include agent skills in action archive ([#13](https://github.com/meigma/attest-vm-image/issues/13)) ([1dc6e44](https://github.com/meigma/attest-vm-image/commit/1dc6e443c5093c81c46b519eaadbcefa71664346))
+
+## Changelog
