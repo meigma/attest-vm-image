@@ -1,0 +1,2 @@
+-rw-r--r-- root/root       412 2024-06-01 12:00 metadata.yaml
+hrw-r--r-- root/root         0 2024-06-01 12:00 templates/stolen link to ../../../etc/shadow

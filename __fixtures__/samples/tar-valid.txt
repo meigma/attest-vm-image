@@ -1,0 +1,6 @@
+-rw-r--r-- root/root       412 2024-06-01 12:00 metadata.yaml
+drwxr-xr-x root/root         0 2024-06-01 12:00 templates/
+-rw-r--r-- root/root       128 2024-06-01 12:00 templates/hostname.tpl
+lrwxrwxrwx root/root         0 2024-06-01 12:00 templates/current -> hostname.tpl
+lrwxrwxrwx root/root         0 2024-06-01 12:00 templates/root -> ..
+hrw-r--r-- root/root         0 2024-06-01 12:00 templates/alias.tpl link to templates/hostname.tpl

@@ -1,0 +1,2 @@
+drwxr-xr-x root/root         0 2024-06-01 12:00 templates/
+-rw-r--r-- root/root       128 2024-06-01 12:00 templates/hostname.tpl

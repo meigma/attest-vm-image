@@ -1,0 +1,87 @@
+/dev/sda1
+[0] = {
+  app2_name: base-files
+  app2_display_name:
+  app2_epoch: 0
+  app2_version: 13ubuntu10.2
+  app2_release:
+  app2_arch: amd64
+  app2_install_path:
+  app2_trans_path:
+  app2_publisher:
+  app2_url:
+  app2_source_package: base-files
+  app2_summary: Debian base system miscellaneous files
+  app2_description: This package contains the basic filesystem hierarchy of a Debian system, and
+several important miscellaneous files, such as /etc/debian_version,
+/etc/host.conf, /etc/issue, /etc/motd, /etc/profile, and others,
+and the text of several common licenses in use on Debian systems.
+.
+  app2_spare1:
+  app2_spare2:
+  app2_spare3:
+  app2_spare4:
+}
+[1] = {
+  app2_name: bash
+  app2_display_name:
+  app2_epoch: 0
+  app2_version: 5.2.21-2ubuntu4
+  app2_release:
+  app2_arch: amd64
+  app2_install_path:
+  app2_trans_path:
+  app2_publisher:
+  app2_url:
+  app2_source_package: bash
+  app2_summary: GNU Bourne Again SHell
+  app2_description: Bash is an sh-compatible command language interpreter that executes
+commands read from the standard input or from a file.
+  app2_spare1:
+  app2_spare2:
+  app2_spare3:
+  app2_spare4:
+}
+[2] = {
+  app2_name: coreutils
+  app2_display_name:
+  app2_epoch: 0
+  app2_version: 9.4-3ubuntu6
+  app2_release:
+  app2_arch: amd64
+  app2_install_path:
+  app2_trans_path:
+  app2_publisher:
+  app2_url:
+  app2_source_package: coreutils
+  app2_summary: GNU core utilities
+  app2_description: This package contains the basic file, shell and text manipulation
+utilities which are expected to exist on every operating system.
+  app2_spare1:
+  app2_spare2:
+  app2_spare3:
+  app2_spare4:
+}
+[3] = {
+  app2_name: openssl
+  app2_display_name:
+  app2_epoch: 0
+  app2_version: 3.0.13-0ubuntu3.1
+  app2_release:
+  app2_arch: amd64
+  app2_install_path:
+  app2_trans_path:
+  app2_publisher:
+  app2_url: https://www.openssl.org/
+  app2_source_package: openssl
+  app2_summary: Secure Sockets Layer toolkit - cryptographic utility
+  app2_description: This package is part of the OpenSSL project's implementation of the SSL
+and TLS cryptographic protocols for secure communication over the
+Internet.
+.
+It contains the general-purpose command line binary /usr/bin/openssl.
+  app2_spare1:
+  app2_spare2:
+  app2_spare3:
+  app2_spare4:
+}

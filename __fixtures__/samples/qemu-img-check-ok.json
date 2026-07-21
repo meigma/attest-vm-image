@@ -1,0 +1,11 @@
+{
+  "image-end-offset": 262144,
+  "total-clusters": 32768,
+  "check-errors": 0,
+  "allocated-clusters": 3,
+  "filename": "disk.qcow2",
+  "format": "qcow2",
+  "fragmented-clusters": 0,
+  "compressed-clusters": 0,
+  "corruptions": 0
+}

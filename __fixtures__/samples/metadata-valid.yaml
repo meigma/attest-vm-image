@@ -1,0 +1,13 @@
+architecture: x86_64
+creation_date: 1717243200
+properties:
+  architecture: x86_64
+  description: Ubuntu noble 24.04
+  os: Ubuntu
+  release: noble
+  variant: cloud
+templates:
+  /etc/hostname:
+    when:
+      - create
+    template: hostname.tpl
