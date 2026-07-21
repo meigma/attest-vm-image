@@ -119,3 +119,14 @@ parent tracking), GNU tar device major,minor has no space, sockets can't
 appear in tar (replaced dead branch with fail-closed type whitelist),
 qemu-img info always emits children[], corruptions-fixed only appears with
 -r. All 8 findings fixed; 90 tests, 100% coverage; dist/ unchanged. PR #9.
+
+## 2026-07-20 22:40 — Phase 3 implemented
+Workflow wf_e47b2d3f-ff6. Realism lens ran the REAL pinned syft/grype
+binaries (+ real grype DB): grype 0.116.0 descriptor.db is nested under
+.status (fixtures were flat-shape); syft SPDX has no documentDescribes
+(relationships-only) and omits components key when empty. Spec lens caught
+SPDX zero-component check bypass via syft's synthetic DocumentRoot package.
+Gates lens caught two builtin-policy false-positive traps on real Ubuntu:
+/var/lib/dbus/machine-id is a symlink (path-exists->non-empty-file) and
+/tmp/** matches systemd skeleton (added exclude support). 7/7 findings
+fixed; 164 tests. PR #10 opened, checks running in background.
