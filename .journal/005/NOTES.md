@@ -15,3 +15,17 @@ in parallel. Known open threads: unsupported-plan billing message not
 translated into the named diagnostic, helper image architecture assertion,
 initial release + released-major-tag smoke.
 Plan: wait for the user's request, then scope and proceed.
+
+## 2026-07-21 14:14 — Goal stated: docs overhaul
+
+User's goal: overhaul documentation. Existing docs/ (design.md, plan.md) is
+antiquated and will be deleted. Create a new operator-facing doc set via a
+multi-agent workflow following the Diátaxis skill, with the established model
+rules (Opus draft/revise, Sonnet critique lenses). Prefer fewer high-quality
+documents; avoid duplication; conceptual docs welcome for operator mental
+models. First deliverable: a proposed document list with short descriptions,
+for user approval before writing anything. Ultracode is enabled.
+
+Launched survey workflow wf_d9ab38d3-20a: five Sonnet readers over interface,
+design docs, runtime code, signing/verification, and operator usage patterns.
+Next: synthesize doc plan, critique it, present proposal.
