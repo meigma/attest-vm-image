@@ -69,3 +69,15 @@ returns 404. Compared with `incus-gh-runner`'s `docs-pages.yml`: attest-vm-image
 also lacks the MkDocs docs project (`docs/mkdocs.yml`, `docs/moon.yml`,
 `docs/pyproject.toml`, and `docs/uv.lock`) that its workflow builds, so adding
 only the workflow YAML would not be sufficient.
+
+## 2026-07-21 16:55 — MkDocs publication PR opened
+
+Opened PR #18, `docs: publish documentation with MkDocs`, from signed commit
+`f889525`. The change wraps the existing operator pages in a Material for
+MkDocs project, pins Python and uv through mise, adds Moon build/serve tasks and
+uv Dependabot coverage, and adds a least-privilege Pages workflow that strictly
+builds pull requests and deploys pushes to main. README links now target the
+published site, and the relocated predicate schema remains covered by its unit
+test. Local `moon run docs:build --summary minimal`, the required
+`moon run root:check --summary minimal`, and the CI-equivalent
+`moon ci --summary minimal` all passed.
