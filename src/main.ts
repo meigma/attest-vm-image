@@ -15,6 +15,7 @@ import { writeEvidence } from './predicate.js'
 import type { PredicateState } from './predicate.js'
 import { writeChecksums } from './checksums.js'
 import { CleanupRegistry } from './cleanup.js'
+import { selectSigner } from './sign/index.js'
 import type { SbomFormat } from './inputs.js'
 
 /**
@@ -135,19 +136,39 @@ export async function run(): Promise<void> {
     })
 
     // Stage 10: sign — only when a signer is selected and the result passed.
+    // A failing result is never signed (design): the unsigned evidence is
+    // written in full, signing is skipped with a notice, and the action then
+    // fails on the evidence-complete result below.
     if (inputs.signer === 'none') {
       core.info('signer is "none"; skipping attestation (unsigned evidence).')
+    } else if (result === 'pass') {
+      // selectSigner never falls back: it returns the requested backend or
+      // throws a named diagnostic (a fail-closed abort inside this try).
+      const signer = selectSigner(inputs)
+      if (signer) {
+        const signResult = await signer.sign({
+          disk: { path: inputs.diskPath, sha256: disk.sha256 },
+          metadata:
+            metadata && inputs.metadataPath
+              ? { path: inputs.metadataPath, sha256: metadata.sha256 }
+              : undefined,
+          sbom: { path: sbom.path, format: sbom.format, sha256: sbom.sha256 },
+          statement,
+          outputDir: outDir
+        })
+        core.setOutput('attestation-bundle-path', signResult.bundleDir)
+        core.setOutput('attestation-url', signResult.attestationUrl)
+      }
     } else {
-      // PLACEHOLDER: Phase 5 inserts `selectSigner(inputs).sign(state)` here,
-      // guarded on `result === 'pass'`, and sets the attestation outputs.
       core.info(
-        `signer "${inputs.signer}" is not yet implemented; ` +
-          'signing lands in Phase 5.'
+        `signer "${inputs.signer}" was selected, but the validation result is ` +
+          '"fail"; a failing result is never signed. Complete unsigned ' +
+          'evidence was written and no attestation was issued.'
       )
     }
 
     // Set every non-signing output. Attestation outputs are set only when a
-    // signer runs, which does not happen in this phase.
+    // signer runs (a passing result with a non-"none" signer).
     core.setOutput('disk-digest', `sha256:${disk.sha256}`)
     core.setOutput('checksums-path', checksumsPath)
     core.setOutput('sbom-path', sbom.path)

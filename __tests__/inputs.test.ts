@@ -47,7 +47,8 @@ describe('inputs.ts', () => {
       failOnSeverity: 'high',
       policyPath: undefined,
       signer: 'none',
-      signingKey: undefined
+      signingKey: undefined,
+      githubToken: ''
     })
   })
 
@@ -118,6 +119,12 @@ describe('inputs.ts', () => {
     withInputs({ 'disk-path': 'disk.qcow2', signer: 'github' })
 
     expect(() => parseInputs()).not.toThrow()
+  })
+
+  it('reads the github-token input', () => {
+    withInputs({ 'disk-path': 'disk.qcow2', 'github-token': 'ghs_from_input' })
+
+    expect(parseInputs().githubToken).toBe('ghs_from_input')
   })
 
   it('accepts a cosign-key backend when a signing-key is given', () => {

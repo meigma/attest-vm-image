@@ -46,6 +46,13 @@ inputs:
       Key reference required by the selected signing backend (never raw key
       bytes).
     required: false
+  github-token:
+    description:
+      Token used by signer github to push attestations to the GitHub attestation
+      API. Defaults to the job token and must carry the attestations write
+      permission; rarely needs overriding.
+    required: false
+    default: ${{ github.token }}
 
 outputs:
   disk-digest:
