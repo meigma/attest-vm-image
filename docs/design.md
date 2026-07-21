@@ -145,7 +145,7 @@ consumer's policy choice, not a per-CVE judgement by the action.
 | `validation-report-path`    | Path to the human/machine-readable results summary.                   |
 | `validation-predicate-path` | Path to the in-toto validation predicate JSON.                        |
 | `attestation-bundle-path`   | Directory of signed attestation bundles, when `signer` is not `none`. |
-| `attestation-url`           | URL/identifier from the backend; always set for `signer: github`.     |
+| `attestation-url`           | URL of the validation attestation; always set for `signer: github`.   |
 
 ## Pipeline
 
@@ -193,8 +193,12 @@ on a shared `state` object (see
 5. **Generate the SBOM** (`src/sbom.ts`). Run Syft against `fsView.mountPath`
    (the mounted image filesystem, a directory source — not the source repo) and
    emit `spdx-json` or `cyclonedx-json`. The SBOM records the QCOW2 sha256 as
-   its subject. Returns `{ path, format, sha256 }`. _Fails when_ Syft errors or
-   produces no components.
+   its subject; Syft's directory source cannot stamp an arbitrary subject digest
+   itself, so `sbom.ts` post-processes the emitted document to insert it (SPDX:
+   a checksum on the described root element; CycloneDX: a hash on
+   `metadata.component`) before the SBOM file's own digest is computed. Returns
+   `{ path, format, sha256 }`. _Fails when_ Syft errors or produces no
+   components.
 
 6. **Scan for vulnerabilities** (`src/vuln.ts`). Run Grype against the generated
    SBOM, record scanner and vulnerability-database versions, and compare the
@@ -219,8 +223,11 @@ on a shared `state` object (see
 
 9. **Compute checksums** (`src/checksums.ts`). Write a `sha256sum`-compatible
    `checksums.txt` covering the disk, optional metadata and build manifest, and
-   every evidence file. Re-digest the input disk and assert it equals
-   `state.disk.sha256` from stage 2. _Fails when_ the input digest changed.
+   every unsigned evidence file. Attestation bundles are **not** covered: they
+   are written by stage 10 after `checksums.txt` is sealed, and Sigstore bundles
+   carry their own verification material. Re-digest the input disk and assert it
+   equals `state.disk.sha256` from stage 2. _Fails when_ the input digest
+   changed.
 
 10. **Sign** (`src/sign/*`), only when `signer` is not `none` **and** the
     predicate's `result` is `pass`. Produce build provenance, an SBOM
@@ -241,7 +248,7 @@ predicate recording the failure — is still written in full for audit.
 Written under `output-directory` (default `./evidence`):
 
 ```text
-checksums.txt                 # sha256sum -c compatible; covers all files below + inputs
+checksums.txt                 # sha256sum -c compatible; covers inputs + all unsigned evidence below (not attestations/)
 sbom.spdx.json                # or sbom.cyclonedx.json, per sbom-format
 vulnerability-report.json     # Grype JSON, with scanner + DB versions
 validation-report.json        # human/machine summary of every check
@@ -262,7 +269,10 @@ and digest.
 The action shells out to four external tools. mise pins only the **development**
 toolchain — it is not present on a consumer's runner — so the action must
 acquire and integrity-verify these tools itself at run time. Primary target is
-GitHub-hosted `ubuntu-24.04`.
+GitHub-hosted `ubuntu-24.04` (x64). Tool pins also carry `linux-arm64` digests,
+but GitHub-hosted arm64 runners expose no KVM, so the libguestfs appliance falls
+back to TCG software emulation there — functional but much slower; arm64 is
+best-effort, x64 is the supported target.
 
 | Tool               | Purpose                         | Acquisition on the runner                                                    |
 | ------------------ | ------------------------------- | ---------------------------------------------------------------------------- |
@@ -441,14 +451,17 @@ attestations:
 
 The `github` signer **always** pushes the attestations to GitHub's attestation
 API, so `attestation-url` is always set when it succeeds; the same bundles are
-also written to `attestations/`. The caller must grant `id-token: write`,
-`attestations: write`, and `contents: read` — the action cannot grant these
-itself. Private and internal repositories require GitHub Enterprise Cloud;
-**GitHub Enterprise Server is unsupported**. Plan support is detected
-**reactively**: the action calls `@actions/attest` and, if the API rejects the
-call because the repository plan cannot issue attestations, catches that
-specific error and re-throws a diagnostic naming the missing capability. It does
-not pre-probe the plan and it never silently downgrades.
+also written to `attestations/`. Because one output cannot carry three URLs,
+`attestation-url` carries the **validation** attestation's URL — the run's
+primary claim; the provenance and SBOM attestation URLs are printed in the
+workflow log and all three bundles sit in `attestation-bundle-path`. The caller
+must grant `id-token: write`, `attestations: write`, and `contents: read` — the
+action cannot grant these itself. Private and internal repositories require
+GitHub Enterprise Cloud; **GitHub Enterprise Server is unsupported**. Plan
+support is detected **reactively**: the action calls `@actions/attest` and, if
+the API rejects the call because the repository plan cannot issue attestations,
+catches that specific error and re-throws a diagnostic naming the missing
+capability. It does not pre-probe the plan and it never silently downgrades.
 
 ### `sigstore-keyless`, `cosign-key`, `kms` (post-v1 extension points)
 

@@ -220,9 +220,13 @@ results the predicate consumes.
 
 - `src/sbom.ts`: `generateSbom(fsView, format, diskSha256)` — run Syft against
   `fsView.mountPath` (a directory source, not the raw QCOW2), emit `spdx-json`
-  (default) or `cyclonedx-json`, embed `diskSha256` as the SBOM subject, fail on
-  Syft error or zero components, return `{ path, format, sha256 }` (`sha256`
-  from `hash.sha256File`). Writes `sbom.spdx.json` or `sbom.cyclonedx.json`.
+  (default) or `cyclonedx-json`, embed `diskSha256` as the SBOM subject by
+  post-processing the emitted JSON (Syft's directory source cannot set an
+  arbitrary subject digest: SPDX gets a checksum on the described root element,
+  CycloneDX a hash on `metadata.component`) **before** computing the file's own
+  digest, fail on Syft error or zero components, return
+  `{ path, format, sha256 }` (`sha256` from `hash.sha256File`). Writes
+  `sbom.spdx.json` or `sbom.cyclonedx.json`.
 - `src/vuln.ts`: `scanVulnerabilities(sbomPath, threshold)` — run Grype on the
   SBOM, record scanner + DB schema version/timestamp, honor a cache dir,
   classify a crash/abnormal-exit/unparseable output as a **scan error** (throw →
@@ -299,9 +303,11 @@ real sample image in CI. This is the first shippable release.
   `validation-predicate.json` and `validation-report.json`.
 - `src/checksums.ts`: `writeChecksums(files, diskPath, expectedDiskSha256)` —
   write a `sha256sum -c`-compatible `checksums.txt` over the disk, optional
-  metadata + build manifest, and every evidence file (digests via
-  `hash.sha256File`); **re-digest the input disk and fail if it differs from
-  `expectedDiskSha256`** (the stage-2 `state.disk.sha256`).
+  metadata + build manifest, and every unsigned evidence file — Phase 5's
+  attestation bundles are excluded (written after checksums; Sigstore bundles
+  carry their own verification material) — (digests via `hash.sha256File`);
+  **re-digest the input disk and fail if it differs from `expectedDiskSha256`**
+  (the stage-2 `state.disk.sha256`).
 - `docs/predicate/vm-image-validation-v1.md` (human schema) and
   `docs/predicate/vm-image-validation-v1.schema.json` (JSON Schema whose `$id`
   equals `PREDICATE_TYPE` verbatim). These are plain in-repo docs — no GitHub
@@ -377,11 +383,12 @@ cannot support it. After this phase v1 is complete.
   `<output-directory>/attestations/provenance.sigstore.json`,
   `sbom.sigstore.json`, and `validation.sigstore.json`; set
   `attestation-bundle-path` to `<output-directory>/attestations` and
-  `attestation-url` to the returned identifier. Plan support is **reactive**:
-  wrap the `@actions/attest` calls and, on the specific error the library raises
-  when the repository plan cannot issue attestations (private/internal without
-  Enterprise Cloud; Enterprise Server), re-throw a diagnostic naming the missing
-  capability — no pre-probe, no silent downgrade.
+  `attestation-url` to the **validation** attestation's returned URL (the
+  provenance and SBOM URLs are printed to the workflow log). Plan support is
+  **reactive**: wrap the `@actions/attest` calls and, on the specific error the
+  library raises when the repository plan cannot issue attestations
+  (private/internal without Enterprise Cloud; Enterprise Server), re-throw a
+  diagnostic naming the missing capability — no pre-probe, no silent downgrade.
 - `src/main.ts`: replace the Phase-4 skip with
   `selectSigner(inputs).sign(state)` when `signer !== 'none'` **and** the
   computed `result` is `pass`, inside the existing `try/finally`. A failing
