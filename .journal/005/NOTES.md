@@ -50,3 +50,18 @@ examples; SPDX predicateType instability callout; GRYPE_DB_CACHE_DIR gets a
 home; uses:-pin rule applies to all docs. docs/predicate/ kept (unit test
 asserts schema $id == PREDICATE_TYPE). Presenting plan to user for approval
 before any writing.
+
+## 2026-07-21 14:40 — Plan approved; execution started
+
+User approved the 7-doc plan verbatim. Created implementation worktree
+.wt/docs-overhaul (branch docs/overhaul from origin/main d3bf514); git rm'd
+docs/design.md + docs/plan.md; docs/predicate/ kept. Wrote the binding
+writer spec to scratchpad/doc-plan-final.md (fixed reference.md anchor
+contract, fact-ownership map, @v1 pin rule, 80-col rule).
+
+Launched writing workflow wf_fef701af-18a: gh-attestation field-test agent
+(opus, empirical online/offline verify commands) -> reference.md draft
+(opus) -> pipeline over 6 remaining docs (opus draft -> 3 sonnet lenses:
+diataxis/facts-vs-code/operator -> opus revise) -> README rewrite quoting
+final tutorial YAML -> opus cross-doc consistency sweep + root:format.
+Next after workflow: my own spot-review, moon run root:check, commit, PR.
