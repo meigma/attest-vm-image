@@ -23,3 +23,13 @@ Confirmed the release workflows require repository variable
 1Password vault, set both on `meigma/attest-vm-image` with `gh`, and verified
 their GitHub metadata showed fresh update timestamps. No secret values were
 printed or written to the workspace.
+
+## 2026-07-21 13:07 — Release Please rerun passed
+
+Reran the latest failed Release Please run, `29856755170`, on main commit
+`1dc6e443c5093c81c46b519eaadbcefa71664346`. Attempt 2 passed in 16 seconds:
+both `Create release app token` and `Run Release Please` succeeded, confirming
+the imported repository variable and secret work in the workflow. The run
+created release PR #14, `chore(main): release 0.1.1`. The only annotation was a
+non-blocking deprecation warning that `actions/create-github-app-token` now
+prefers `client-id` over `app-id`.
