@@ -3,9 +3,18 @@
 <!-- Add compact project-specific technical notes here. Edit freely; this file is not append-only. -->
 
 - v1 (plan Phases 0-5) is implemented and merged (PRs #7-#12, session 002).
-  `docs/design.md` + `docs/plan.md` remain the spec; post-v1 = one external
-  signing backend behind `src/sign/` on real demand. No release exists yet;
-  the initial release and released-major-tag smoke remain open.
+  Post-v1 = one external signing backend behind `src/sign/` on real demand.
+  No release exists yet; the initial release and released-major-tag smoke
+  remain open.
+- docs/design.md + docs/plan.md were DELETED in PR #17 (session 005); the
+  code is the spec. docs/ is now an operator-facing Diátaxis set; docs/
+  reference.md owns every shared fact behind a fixed anchor contract (other
+  docs link, never restate) and its builtin/v1 JSON must track
+  src/contamination.ts. All doc examples pin @v1 (resolves after the first
+  release). gh-attestation facts field-tested with gh 2.94.0: --bundle
+  accepts single-object .sigstore.json but still fetches the TUF trust
+  root; air-gapped verify needs --custom-trusted-root; non-provenance
+  bundles need --predicate-type; non-TTY success prints nothing.
 - Manual hosted acceptance (session 003; `.journal/003/ACCEPTANCE_REPORT.md`)
   validated `setup-distrobuilder` v1.0.0 and the full action runtime against a
   real Distrobuilder-built Ubuntu Noble VM. External staging is fixed by PR #13;

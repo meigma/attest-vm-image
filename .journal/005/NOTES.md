@@ -85,3 +85,15 @@ checkout@v7 already current). moon run root:check green in the worktree
 "pass"). Committed 25d3de7 (10 files, +2026/-1120) on docs/overhaul,
 pushed, opened PR #17 with squash-ready title "docs: replace design docs
 with operator-facing documentation". Watching CI; merge after green.
+
+## 2026-07-21 16:22 — Close
+
+User approved and PR #17 was squash-merged as b4c4558 ("docs: replace
+design docs with operator-facing documentation", 10 files, +2026/-1120).
+Local main fast-forwarded to b4c4558; docs/overhaul worktree, local
+branch, and remote branch all removed. SUMMARY.md written, INDEX.md row
+set to complete, TECH_NOTES.md updated (design/plan deleted -> code is
+spec; docs fact-ownership + gh attestation field-test findings). Handoff:
+@v1 doc pins resolve once session 004's v1.0.0 release publishes; the
+billing-plan classifier gap (session 003) is documented but not fixed in
+code.
