@@ -135,9 +135,8 @@ tasks:
       cache: false
 
   # Scoped audit at the strict `--audit-level=low` threshold. scripts/audit.mjs
-  # fails on any advisory EXCEPT the one unfixable upstream advisory
-  # (GHSA-jfc7-64v2-mr8c, pulled transitively by the required @actions/attest
-  # dependency); see that file for the rationale. Network-dependent: new
+  # fails on any advisory not explicitly allowlisted there (the allowlist is
+  # currently empty); see that file for the rationale. Network-dependent: new
   # upstream advisories can still break unrelated PRs, which is intended.
   audit:
     command: 'node scripts/audit.mjs'

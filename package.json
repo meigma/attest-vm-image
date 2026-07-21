@@ -68,5 +68,11 @@
   },
   "optionalDependencies": {
     "@rollup/rollup-linux-x64-gnu": "*"
+  },
+  "overrides": {
+    "@actions/attest": {
+      "@sigstore/sign": "^5.0.0",
+      "@sigstore/bundle": "^5.0.0"
+    }
   }
 }

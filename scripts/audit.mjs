@@ -1,19 +1,22 @@
 // Scoped `npm audit` gate.
 //
 // `moon run root:audit` (part of `root:check`) runs this instead of a bare
-// `npm audit --audit-level=low` so the strict low threshold is preserved while
-// exactly one unfixable upstream advisory is allowlisted:
+// `npm audit --audit-level=low` so a strict low threshold can coexist with an
+// explicit, reviewable allowlist for advisories that have no upstream fix.
 //
-//   GHSA-jfc7-64v2-mr8c — @sigstore/core DSSE payloadType type-binding failure.
-//   Pulled transitively by the required @actions/attest runtime dependency via
-//   @sigstore/sign; marked "No fix available" upstream, so no version bump or
-//   `overrides` entry can resolve it.
+// The allowlist is currently EMPTY: the one advisory this repo has had to deal
+// with (GHSA-jfc7-64v2-mr8c, @sigstore/core DSSE payloadType type-binding
+// failure, pulled transitively by @actions/attest) is resolved by the
+// `overrides` block in package.json forcing @sigstore/sign@^5 /
+// @sigstore/bundle@^5, which resolve the fixed @sigstore/core@^4.0.1. If that
+// override ever regresses, the advisory reappears and this gate fails.
 //
-// Any advisory whose source GHSA id is NOT in ALLOWLIST fails the gate,
-// regardless of severity — so a new or unrelated advisory still breaks CI.
+// To allowlist a future unfixable advisory, add its GHSA id here with a
+// comment justifying it; any advisory whose source GHSA id is NOT in ALLOWLIST
+// fails the gate regardless of severity.
 import { execFileSync } from 'node:child_process'
 
-const ALLOWLIST = new Set(['GHSA-jfc7-64v2-mr8c'])
+const ALLOWLIST = new Set([])
 
 let stdout
 try {
@@ -53,6 +56,7 @@ if (unexpected.length > 0) {
 
 const total = report.metadata?.vulnerabilities?.total ?? 0
 console.log(
-  `audit: ${total} advisory record(s), all tracing to allowlisted ` +
-    'GHSA-jfc7-64v2-mr8c. OK.'
+  total === 0
+    ? 'audit: no advisories. OK.'
+    : `audit: ${total} advisory record(s), all allowlisted. OK.`
 )

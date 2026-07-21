@@ -108,10 +108,11 @@ CI's `check-dist` task rebuilds the bundle and fails if the committed copy is
 stale.
 
 The `audit` step runs `npm audit` at the strict `--audit-level=low` threshold
-through `scripts/audit.mjs`, which allowlists exactly one unfixable upstream
-advisory — `GHSA-jfc7-64v2-mr8c` in `@sigstore/core`, pulled transitively by the
-required `@actions/attest` dependency and marked "No fix available". Any other
-advisory, at any severity, still fails the gate.
+through `scripts/audit.mjs` (allowlist currently empty — any advisory fails the
+gate). `package.json` carries an `overrides` block forcing `@sigstore/sign@^5`
+and `@sigstore/bundle@^5` under `@actions/attest`, resolving the fixed
+`@sigstore/core@^4.0.1` (GHSA-jfc7-64v2-mr8c); a unit test smoke-imports
+`@actions/attest` so an incompatible future bump fails in jest, not at runtime.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) and [SECURITY.md](SECURITY.md).
 
