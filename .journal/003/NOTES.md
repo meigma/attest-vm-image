@@ -80,3 +80,15 @@ entered the bundled action, produced its expected output directory, and then
 hit only the deliberately missing-manifest error. The temporary smoke workflow
 was removed immediately afterward. PR #13 is ready for review with CI,
 build-image, sign-image, and Kusari Inspector all green.
+
+## 2026-07-21 11:20 — Packaging fix merged
+
+After the user's approval, PR #13 was squash-merged at the exact reviewed head
+`f00c5ca56cbf1dcedf53ee4288d263bf887c146e`. The resulting `main` commit is
+`1dc6e443c5093c81c46b519eaadbcefa71664346`.
+
+All hosted checks were reverified immediately before merge. Local `main` was
+fast-forwarded to the remote commit, and the integrated Worktrunk worktree plus
+local and remote `feat/commit-agent-skills` branches were removed. The user
+deleted the disposable acceptance repository; its absence was verified through
+GitHub before merging.
