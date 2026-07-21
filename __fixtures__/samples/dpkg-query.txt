@@ -1,0 +1,2 @@
+qemu-utils 1:8.2.2+ds-0ubuntu1.7
+libguestfs-tools 1.52.0-1ubuntu1
