@@ -68,3 +68,11 @@ PR #5: https://github.com/meigma/attest-vm-image/pull/5. Main checkout is
 clean again. Squash-merge with the PR title as the commit subject per repo
 convention. Next after merge: remove the worktree (wt remove docs/design-plan)
 and start plan Phase 0 (template conversion + real action interface).
+
+## 2026-07-20 18:25 — Close
+PR #5 (docs: add design and implementation plan) squash-merged as bd1372c with
+explicit user approval; local main fast-forwarded; docs/design-plan worktree
+removed. SUMMARY.md written, INDEX.md row set to complete, TECH_NOTES.md
+seeded with the docs-driven handoff context. Handoff state: main is clean at
+bd1372c with docs/ landed; next step is plan Phase 0 (template conversion);
+four Dependabot PRs remain untriaged. Session 001 closed.
