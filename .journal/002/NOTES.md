@@ -97,3 +97,14 @@ needs Node 24.9+); replaced with lockfile version assertions. PR #7 squash-
 merged. Lesson: workflow args arrived as JSON string -> ${WT} interpolated as
 "undefined" in agent prompts (session-001 lesson recurred); agents recovered
 via branch name. Parse string args in all future workflow scripts.
+
+## 2026-07-20 20:55 — Phase 1 implemented (PR #8)
+Workflow wf_e3dd862d-e7b: researcher pinned syft 1.48.0 / grype 0.116.0
+(digests computed locally, cross-checked vs published checksums.txt, then
+independently re-downloaded and re-verified by a review lens — zero findings).
+Implementer's `import pkg from '../package.json' with { type: 'json' }`
+poisoned @rollup/plugin-typescript whole-program emit (misleading error
+pointing at main.ts); one reviewer misdiagnosed it as a pre-existing
+toolchain break, fixer proved otherwise and swapped to createRequire.
+dist/ unchanged (modules not yet reachable from entrypoint). root:check
+fully green incl. check-dist; 48 tests, 100% coverage. PR #8 open.
