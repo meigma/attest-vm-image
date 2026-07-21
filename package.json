@@ -1,21 +1,18 @@
 {
-  "name": "template-actions",
-  "description": "Meigma template for GitHub Actions written in TypeScript",
+  "name": "attest-vm-image",
+  "description": "GitHub Action that inspects a finished QCOW2 VM image and produces signed SBOM, vulnerability, contamination, and validation-predicate evidence",
   "version": "0.1.0",
   "author": "Meigma",
   "type": "module",
   "private": true,
-  "homepage": "https://github.com/meigma/template-actions",
+  "homepage": "https://github.com/meigma/attest-vm-image",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/meigma/template-actions.git"
+    "url": "git+https://github.com/meigma/attest-vm-image.git"
   },
   "bugs": {
-    "url": "https://github.com/meigma/template-actions/issues"
+    "url": "https://github.com/meigma/attest-vm-image/issues"
   },
-  "keywords": [
-    "actions"
-  ],
   "exports": {
     ".": "./dist/index.js"
   },
@@ -25,7 +22,7 @@
   "scripts": {
     "bundle": "npm run format:write && npm run package",
     "check-dist": "npm run package && git diff --exit-code -- dist",
-    "ci": "npm run format:check && npm run lint && npm test && npm run check-dist && npm audit --audit-level=low",
+    "ci": "npm run format:check && npm run lint && npm test && npm run check-dist && node scripts/audit.mjs",
     "ci-test": "NODE_OPTIONS=--experimental-vm-modules NODE_NO_WARNINGS=1 npx jest",
     "coverage": "npx make-coverage-badge --output-path ./badges/coverage.svg",
     "format:write": "npx prettier --write .",
@@ -38,7 +35,11 @@
   },
   "license": "(MIT OR Apache-2.0)",
   "dependencies": {
-    "@actions/core": "^3.0.0"
+    "@actions/attest": "^3.2.0",
+    "@actions/core": "^3.0.0",
+    "@actions/exec": "^3.0.0",
+    "@actions/glob": "^0.7.0",
+    "@actions/tool-cache": "^4.0.0"
   },
   "devDependencies": {
     "@eslint/compat": "^2.0.2",
@@ -67,5 +68,11 @@
   },
   "optionalDependencies": {
     "@rollup/rollup-linux-x64-gnu": "*"
+  },
+  "overrides": {
+    "@actions/attest": {
+      "@sigstore/sign": "^5.0.0",
+      "@sigstore/bundle": "^5.0.0"
+    }
   }
 }

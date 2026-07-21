@@ -1,28 +1,70 @@
-# Sample action metadata. Replace name/description/author/branding, inputs, and
-# outputs with your action's real interface after creating a repo from this
-# template.
-#
-# If your action pairs with a released CLI, pin its version here with a
-# `# x-release-please-version` marker on the input default and add
-#   "extra-files": [{ "type": "generic", "path": "action.yml" }]
-# to release-please-config.json so releases keep it in sync.
-name: The name of your action here
-description: Provide a description here
+name: attest-vm-image
+description:
+  Inspect a finished QCOW2 VM image and produce signed SBOM, vulnerability,
+  contamination, and validation-predicate evidence.
 author: Meigma
 
 branding:
-  icon: heart
-  color: red
+  icon: shield
+  color: blue
 
 inputs:
-  milliseconds:
-    description: Your input description here
+  disk-path:
+    description: Path to the completed QCOW2 disk image to inspect.
     required: true
-    default: '1000'
+  metadata-path:
+    description: Incus metadata tarball associated with the disk image.
+    required: false
+  build-manifest-path:
+    description: Builder-generated manifest with source and build information.
+    required: false
+  output-directory:
+    description: Directory the action writes evidence files into.
+    required: false
+    default: ./evidence
+  sbom-format:
+    description: SBOM output format, either spdx-json or cyclonedx-json.
+    required: false
+    default: spdx-json
+  fail-on-severity:
+    description:
+      Vulnerability severity threshold that fails the run - critical, high, or
+      none for report-only.
+    required: false
+    default: high
+  policy-path:
+    description:
+      Contamination-policy file; the built-in policy is used when unset.
+    required: false
+  signer:
+    description:
+      Signing backend - none, github, sigstore-keyless, cosign-key, or kms.
+    required: false
+    default: none
+  signing-key:
+    description:
+      Key reference required by the selected signing backend (never raw key
+      bytes).
+    required: false
 
 outputs:
-  time:
-    description: Your output description here
+  disk-digest:
+    description: sha256:<hex> of the input QCOW2 image.
+  checksums-path:
+    description: Path to the generated checksums.txt.
+  sbom-path:
+    description: Path to the generated SBOM.
+  vulnerability-report-path:
+    description: Path to the machine-readable vulnerability report.
+  validation-report-path:
+    description: Path to the human/machine-readable results summary.
+  validation-predicate-path:
+    description: Path to the in-toto validation predicate JSON.
+  attestation-bundle-path:
+    description:
+      Directory of signed attestation bundles, when signer is not none.
+  attestation-url:
+    description: URL of the validation attestation, set for signer github.
 
 runs:
   using: node24

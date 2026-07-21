@@ -3,8 +3,10 @@ layer: 'application'
 stack: 'backend'
 
 project:
-  title: 'template-actions'
-  description: 'Meigma template for TypeScript GitHub Actions.'
+  title: 'attest-vm-image'
+  description:
+    'GitHub Action that inspects a finished QCOW2 VM image and produces signed
+    validation evidence.'
   owner: 'meigma'
   maintainers:
     - 'meigma'
@@ -132,14 +134,17 @@ tasks:
     options:
       cache: false
 
-  # Network-dependent: new upstream advisories can break unrelated PRs. If that
-  # proves too noisy, remove it from check.deps (one line).
+  # Scoped audit at the strict `--audit-level=low` threshold. scripts/audit.mjs
+  # fails on any advisory not explicitly allowlisted there (the allowlist is
+  # currently empty); see that file for the rationale. Network-dependent: new
+  # upstream advisories can still break unrelated PRs, which is intended.
   audit:
-    command: 'npm audit --audit-level=low'
+    command: 'node scripts/audit.mjs'
     deps:
       - 'root:install'
     inputs:
       - '@group(configs)'
+      - 'scripts/audit.mjs'
     options:
       cache: false
 
