@@ -65,3 +65,23 @@ Launched writing workflow wf_fef701af-18a: gh-attestation field-test agent
 diataxis/facts-vs-code/operator -> opus revise) -> README rewrite quoting
 final tutorial YAML -> opus cross-doc consistency sweep + root:format.
 Next after workflow: my own spot-review, moon run root:check, commit, PR.
+
+## 2026-07-21 16:05 — Docs written, reviewed, PR opened
+
+Writing workflow wf_fef701af-18a completed: 36 agents, ~3.87M tokens, zero
+errors. Field test empirically proved the gh attestation story (key finds:
+--bundle accepts our single-object .sigstore.json; --bundle alone still
+fetches the TUF trust root; --bundle + --custom-trusted-root verified
+air-gapped under a black-holed proxy; default predicate is provenance-only
+so sbom/validation bundles need --predicate-type; bare digests rejected;
+non-TTY success prints nothing). Consistency sweep: all links/anchors pass,
+no @v0, README YAML byte-identical to tutorial.
+
+My review: read all 8 files; verified builtin/v1 JSON in reference.md
+matches src/contamination.ts rule-for-rule; verified gh 2.94.0 claim;
+bumped tutorial upload-artifact@v4 -> @v7 (checked v7 interface via API;
+checkout@v7 already current). moon run root:check green in the worktree
+(note: moon caches across worktrees — confirm pwd before trusting a 6s
+"pass"). Committed 25d3de7 (10 files, +2026/-1120) on docs/overhaul,
+pushed, opened PR #17 with squash-ready title "docs: replace design docs
+with operator-facing documentation". Watching CI; merge after green.
