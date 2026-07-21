@@ -21,13 +21,12 @@ exact artifact was evaluated, what software it contained, which policy was
 applied, what passed or failed, which workflow produced the evidence, and which
 identity signed it.
 
-> **Status:** under active development. Inputs and outputs below describe the
-> full interface; the evidence pipeline is being implemented in phases.
-
 ## Usage
 
-The default `signer: none` mode writes checksums, the SBOM, the reports, and the
-validation predicate without signing, and needs only `contents: read`.
+The default `signer: none` mode writes checksums, the SBOM, the vulnerability
+and validation reports, and the validation predicate without signing, and needs
+only `contents: read`. Once an earlier step in the job has built your image, add
+the action:
 
 ```yaml
 jobs:
@@ -36,104 +35,63 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: meigma/attest-vm-image@v0
+      # An earlier step in this job builds your image at build/disk.qcow2.
+      - uses: meigma/attest-vm-image@v1
         with:
           disk-path: build/disk.qcow2
+          fail-on-severity: none
           signer: none
 ```
 
-### Signing with `signer: github`
-
-`signer: github` additionally signs the evidence and publishes three GitHub
-attestations (build provenance, an SBOM attestation, and the custom validation
-attestation) via GitHub Actions OIDC. The caller must grant the extra
-permissions the action cannot grant itself:
+To sign and publish attestations, add three job permissions and set
+`signer: github`:
 
 ```yaml
-jobs:
-  attest:
-    runs-on: ubuntu-24.04
-    permissions:
-      contents: read # read the workspace
-      id-token: write # mint the OIDC token that identifies the signer
-      attestations: write # publish attestations to the repository
-    steps:
-      - uses: meigma/attest-vm-image@v0
-        with:
-          disk-path: build/disk.qcow2
-          signer: github
+permissions:
+  contents: read
+  id-token: write
+  attestations: write
+steps:
+  - uses: meigma/attest-vm-image@v1
+    with: { disk-path: build/disk.qcow2, signer: github }
 ```
 
-Private and internal repositories require **GitHub Enterprise Cloud**; GitHub
-Enterprise Server is **unsupported**. A failing validation result is never
-signed — the unsigned evidence (including the predicate recording the failure)
-is still written in full, but no attestation is issued. When the repository plan
-cannot issue attestations the action fails with a diagnostic naming the missing
-capability rather than downgrading.
+Signing has repository plan and visibility requirements, and a failing result is
+never signed — see [Publish signed attestations](docs/signing.md). For a
+complete, runnable workflow, start with the
+[Getting started](docs/getting-started.md) tutorial. Every input and output is
+listed in the [reference](docs/reference.md).
 
-## Inputs
+## Requirements at a glance
 
-| Input                 | Required | Default        | Description                                                                                            |
-| --------------------- | -------- | -------------- | ------------------------------------------------------------------------------------------------------ |
-| `disk-path`           | yes      | —              | Path to the completed QCOW2 disk image.                                                                |
-| `metadata-path`       | no       | _(unset)_      | Incus metadata tarball associated with the disk image.                                                 |
-| `build-manifest-path` | no       | _(unset)_      | Builder-generated manifest with source and build information.                                          |
-| `output-directory`    | no       | `./evidence`   | Directory the action writes evidence files into.                                                       |
-| `sbom-format`         | no       | `spdx-json`    | SBOM format: `spdx-json` or `cyclonedx-json`.                                                          |
-| `fail-on-severity`    | no       | `high`         | Vulnerability threshold: `critical`, `high`, or `none` (report-only).                                  |
-| `policy-path`         | no       | _(built-in)_   | Contamination-policy file; the built-in policy is used when unset.                                     |
-| `signer`              | no       | `none`         | `none`, `github`, `sigstore-keyless`, `cosign-key`, or `kms`.                                          |
-| `signing-key`         | no       | _(unset)_      | Key reference required by the selected backend (never raw key bytes).                                  |
-| `github-token`        | no       | `github.token` | Token `signer: github` uses to push attestations; must carry `attestations: write`. Rarely overridden. |
+- A Linux `x64` GitHub-hosted runner (`arm64` is best-effort); non-Linux
+  platforms and other architectures fail closed.
+- The action installs `qemu-utils` and `libguestfs-tools` itself at runtime, so
+  the runner must permit `apt-get` and passwordless `sudo` — hosted `ubuntu-*`
+  runners qualify by default.
+- Outbound network access to `github.com` for the pinned `syft` and `grype`
+  binaries, to the Grype vulnerability database, and — for `signer: github` — to
+  the GitHub attestation API.
 
-## Outputs
+The full runner, privilege, and network catalog is in the
+[reference](docs/reference.md#requirements).
 
-| Output                      | Description                                                           |
-| --------------------------- | --------------------------------------------------------------------- |
-| `disk-digest`               | `sha256:<hex>` of the input QCOW2 image.                              |
-| `checksums-path`            | Path to the generated `checksums.txt`.                                |
-| `sbom-path`                 | Path to the generated SBOM.                                           |
-| `vulnerability-report-path` | Path to the machine-readable vulnerability report.                    |
-| `validation-report-path`    | Path to the human/machine-readable results summary.                   |
-| `validation-predicate-path` | Path to the in-toto validation predicate JSON.                        |
-| `attestation-bundle-path`   | Directory of signed attestation bundles, when `signer` is not `none`. |
-| `attestation-url`           | URL of the validation attestation; set for `signer: github`.          |
+## Documentation
 
-## Verification
-
-Every evidence run — any `signer`, including `none` — writes a
-`sha256sum -c`-compatible `checksums.txt` covering the input disk and all
-unsigned evidence files. Verify it from the directory the paths are relative to
-(the workflow workspace by default):
-
-```sh
-sha256sum -c evidence/checksums.txt
-```
-
-When the run used `signer: github`, the three published attestations can be
-verified independently with the GitHub CLI, which recomputes the disk digest and
-checks the attestation against the repository:
-
-```sh
-gh attestation verify disk.qcow2 --repo meigma/attest-vm-image
-```
-
-`gh attestation verify` reads the attestations from GitHub, so it needs no local
-bundle files; the bundles written under `attestations/` (and named by
-`attestation-bundle-path`) are the same Sigstore bundles for offline archival.
-
-### Requirements for `signer: github`
-
-- The caller must grant `id-token: write`, `attestations: write`, and
-  `contents: read` (see the usage example above). The action cannot grant these
-  itself.
-- Public repositories can issue attestations on any plan. **Private and internal
-  repositories require GitHub Enterprise Cloud.** GitHub Enterprise Server is
-  **unsupported** — the action does not fall back to another signer there.
-- A failing validation result (a vulnerability threshold breach or a failed
-  contamination check) is **never signed**: the full unsigned evidence is
-  written, signing is skipped, and the run then fails on the failing result.
-  Only images that pass validation are ever attested.
+- [Getting started](docs/getting-started.md) — tutorial: wire the action into a
+  workflow, produce a folder of evidence, and verify it yourself.
+- [Publish signed attestations](docs/signing.md) — how-to: switch to
+  `signer: github` and publish signed GitHub attestations for the image.
+- [Verify evidence and attestations](docs/verification.md) — how-to: verify
+  checksums and published attestations as a downstream consumer.
+- [Control what fails validation](docs/validation-policy.md) — how-to: tune the
+  vulnerability threshold and the contamination policy.
+- [Troubleshoot a failed run](docs/troubleshooting.md) — how-to: a symptom-first
+  decision path when a run fails.
+- [Reference](docs/reference.md) — every input, output, evidence file,
+  requirement, and failure mode in one place.
+- [How attest-vm-image works](docs/how-it-works.md) — explanation: the mental
+  model behind the evidence and the two ways a run can fail.
 
 ## Development
 
