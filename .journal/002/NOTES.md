@@ -108,3 +108,14 @@ pointing at main.ts); one reviewer misdiagnosed it as a pre-existing
 toolchain break, fixer proved otherwise and swapped to createRequire.
 dist/ unchanged (modules not yet reachable from entrypoint). root:check
 fully green incl. check-dist; 48 tests, 100% coverage. PR #8 open.
+
+## 2026-07-20 21:50 — Phase 2 implemented (PR #9)
+Workflow wf_2dd18ae8-a29. Realism review lens earned its keep: built a real
+Ubuntu 24.04 image + libguestfs and proved the guestfish chain was missing an
+in-session `mount` before inspect-list-applications2 (would have failed on
+every real disk — invisible to mocked unit tests). Also caught: symlinked-
+parent tar escape admitted by lexical-only check (fixed via declared-symlink
+parent tracking), GNU tar device major,minor has no space, sockets can't
+appear in tar (replaced dead branch with fail-closed type whitelist),
+qemu-img info always emits children[], corruptions-fixed only appears with
+-r. All 8 findings fixed; 90 tests, 100% coverage; dist/ unchanged. PR #9.
