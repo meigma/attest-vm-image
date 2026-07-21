@@ -16,7 +16,17 @@ const compat = new FlatCompat({
 
 export default [
   {
-    ignores: ['**/coverage', '**/dist', '**/linter', '**/node_modules']
+    ignores: [
+      '**/coverage',
+      '**/dist',
+      '**/linter',
+      '**/node_modules',
+      // Transient compiled rollup config (rollup.config-<timestamp>.mjs):
+      // exists only while root:package runs; when moon ci runs package and
+      // lint concurrently, eslint can glob it and then ENOENT when rollup
+      // deletes it.
+      'rollup.config-*.mjs'
+    ]
   },
   ...compat.extends(
     'eslint:recommended',
