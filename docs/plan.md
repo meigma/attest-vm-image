@@ -120,7 +120,10 @@ independently unit-tested; not yet wired into a running pipeline.
   carries only the current build). `ensureBinary(name)` downloads via
   `@actions/tool-cache`, recomputes SHA-256 with `hash.sha256File`, compares to
   `PINNED_TOOLS[name].sha256[platform]`, **aborts on mismatch**, and caches;
-  `ensureAptPackages()` runs `apt-get install` and fails if install fails.
+  `ensureAptPackages()` runs `apt-get install`, fails if install fails, then
+  runs `sudo chmod +r /boot/vmlinuz-*` and fails closed if no readable kernel
+  remains — Ubuntu ships the kernel image root-readable only, and the libguestfs
+  direct backend's supermin appliance must read it as the non-root runner user.
   `toolVersions()` returns resolved name/version pairs for the predicate —
   `syft`/`grype` from `PINNED_TOOLS`, `qemu-utils`/`libguestfs-tools` from
   `dpkg-query -W` **after** install (the actually-installed versions), and this
@@ -135,11 +138,12 @@ independently unit-tested; not yet wired into a running pipeline.
   `GITHUB_EVENT_NAME`, `GITHUB_ACTOR` into a typed object consumed by
   `src/predicate.ts`.
 - Tests: `__tests__/tools.test.ts` (sha256 match caches / mismatch throws, using
-  a fixture buffer and mocked tool-cache; `toolVersions()` reads dpkg-query
-  output from `__fixtures__/exec.ts`), `__tests__/cleanup.test.ts` (drain order,
-  isolation on throw), `__tests__/context.test.ts` (env → object, missing-var
-  handling). Add `__fixtures__/samples/` for captured tool output used from
-  Phase 2 on.
+  a fixture buffer and mocked tool-cache; `ensureAptPackages()` issues the
+  kernel-readability chmod after install and throws when it fails;
+  `toolVersions()` reads dpkg-query output from `__fixtures__/exec.ts`),
+  `__tests__/cleanup.test.ts` (drain order, isolation on throw),
+  `__tests__/context.test.ts` (env → object, missing-var handling). Add
+  `__fixtures__/samples/` for captured tool output used from Phase 2 on.
 
 **Dependencies.** Phase 0.
 
@@ -312,14 +316,22 @@ real sample image in CI. This is the first shippable release.
   `core.setFailed` on any throw. Leave a `signer === 'none'` early skip where
   Phase 5 inserts signing.
 - `.github/workflows/integration.yml` (`ubuntu-24.04`,
-  `permissions: { contents: read }`): build the action, generate a tiny QCOW2 at
-  test time (`qemu-img create` + a small mkfs/populate via guestfish), run the
-  action with `signer: none`, and assert all evidence files exist under
-  `./evidence`, every report carries the input digest,
-  `sha256sum -c evidence/checksums.txt` passes, and the input disk is
-  byte-identical afterward. Negative jobs: corrupt input and non-QCOW2 input
-  fail clearly; a seeded high-severity finding with `fail-on-severity: high`
-  fails the run. Pin all third-party actions by full commit SHA.
+  `permissions: { contents: read }`): build the action and generate a tiny QCOW2
+  at test time. The image must survive the pipeline's own fail-closed rules, so
+  a bare mkfs filesystem is not enough: `qemu-img create` + guestfish populate
+  an ext4 root that libguestfs OS inspection recognizes — a minimal Debian-style
+  layout with `/etc/os-release`, the usual top-level directories, and a small
+  dpkg database (`/var/lib/dpkg/status`) listing a handful of packages, at least
+  one of them an old version with known high/critical CVEs (feeds the
+  threshold-breach job; without the seeded database, stage 3 and the
+  zero-component SBOM check in stage 5 abort by design). Run the action with
+  `signer: none` (positive job uses `fail-on-severity: none` so the seeded CVEs
+  do not fail it), and assert all evidence files exist under `./evidence`, every
+  report carries the input digest, `sha256sum -c evidence/checksums.txt` passes,
+  and the input disk is byte-identical afterward. Negative jobs: corrupt input
+  and non-QCOW2 input fail clearly; the seeded high-severity finding with
+  `fail-on-severity: high` fails the run. Pin all third-party actions by full
+  commit SHA.
 - Tests: `__tests__/predicate.test.ts` (snapshot from fixture state; `result`
   logic; `PREDICATE_TYPE` string-equals the `$id` in
   `vm-image-validation-v1.schema.json`; `validation-report.json` carries
@@ -371,8 +383,11 @@ cannot support it. After this phase v1 is complete.
   Enterprise Cloud; Enterprise Server), re-throw a diagnostic naming the missing
   capability — no pre-probe, no silent downgrade.
 - `src/main.ts`: replace the Phase-4 skip with
-  `selectSigner(inputs).sign(state)` when `signer !== 'none'`, inside the
-  existing `try/finally`.
+  `selectSigner(inputs).sign(state)` when `signer !== 'none'` **and** the
+  computed `result` is `pass`, inside the existing `try/finally`. A failing
+  result is never signed: the unsigned evidence is written in full, signing is
+  skipped with a `core.info` notice, and the action then fails on the
+  threshold/contamination result as in Phase 4.
 - `README.md`: fill the "Verification" section —
   `sha256sum -c evidence/checksums.txt` (any run) and
   `gh attestation verify disk.qcow2 --repo meigma/attest-vm-image`
@@ -389,7 +404,9 @@ cannot support it. After this phase v1 is complete.
   dispatches to a different one); the `github` path calls the mocked
   `@actions/attest` three times with the right predicate/subject; a simulated
   unsupported-plan error from the mock is re-thrown as the documented
-  named-capability diagnostic.
+  named-capability diagnostic. `__tests__/main.test.ts` gains a case asserting
+  no signer is invoked when the predicate `result` is `fail`, even with
+  `signer: github`.
 
 **Dependencies.** Phase 4 (predicate + evidence are the signing inputs).
 
