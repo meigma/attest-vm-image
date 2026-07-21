@@ -59,3 +59,13 @@ footer preserved. Release Please run `29868270116` passed and opened PR #16,
 changelog all target 1.0.0, and all PR checks passed. Main CI `29868270138` and
 Integration `29868270265` also passed. Fast-forwarded local main and removed the
 temporary Worktrunk worktree/branch; PR #16 remains open for release review.
+
+## 2026-07-21 16:30 — Docs publication gap confirmed
+
+Read-only live diagnosis confirmed GitHub Pages is enabled at
+`https://meigma.github.io/attest-vm-image/` with workflow-based publishing, but
+the repository has no Pages workflow, no Pages deployment history, and the URL
+returns 404. Compared with `incus-gh-runner`'s `docs-pages.yml`: attest-vm-image
+also lacks the MkDocs docs project (`docs/mkdocs.yml`, `docs/moon.yml`,
+`docs/pyproject.toml`, and `docs/uv.lock`) that its workflow builds, so adding
+only the workflow YAML would not be sufficient.
