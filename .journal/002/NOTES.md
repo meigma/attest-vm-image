@@ -76,3 +76,11 @@ main fast-forwarded; docs/integration-image-libguestfs worktree and branch
 removed. All seven review findings from this session are now landed in
 docs/design.md and docs/plan.md. Next step: plan Phase 0 (template
 conversion).
+
+## 2026-07-20 19:35 — Ultracode: begin phased implementation
+User enabled ultracode and granted full autonomy to execute plan Phases 0-5
+end-to-end (small workflows; subagents pinned to Opus 4.8/Sonnet 5, never the
+session model). Per-phase loop: worktree from main -> workflow (implement ->
+3-lens adversarial verify -> fix) -> commit -> PR -> checks -> squash merge.
+Phase 0 worktree feat/phase0-template-conversion created; baseline root:check
+green; workflow wf_d7a4bf13-6b4 launched.
