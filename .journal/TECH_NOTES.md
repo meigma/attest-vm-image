@@ -4,8 +4,13 @@
 
 - v1 (plan Phases 0-5) is implemented and merged (PRs #7-#12, session 002).
   `docs/design.md` + `docs/plan.md` remain the spec; post-v1 = one external
-  signing backend behind `src/sign/` on real demand. No release cut yet —
-  release-please should be proposing one.
+  signing backend behind `src/sign/` on real demand. No release exists yet;
+  the initial release and released-major-tag smoke remain open.
+- Manual hosted acceptance (session 003; `.journal/003/ACCEPTANCE_REPORT.md`)
+  validated `setup-distrobuilder` v1.0.0 and the full action runtime against a
+  real Distrobuilder-built Ubuntu Noble VM. External staging is fixed by PR #13;
+  the remaining action defect is that GitHub's current private-plan billing
+  rejection is not translated into the named unsupported-plan diagnostic.
 - CI gate: `moon run root:check`. dist/ is committed; `check-dist` diffs the
   rebuilt bundle against HEAD, so it only passes after dist/ is committed.
   Audit runs through `scripts/audit.mjs` (strict low threshold + reviewable
@@ -32,7 +37,8 @@
   the highest-value review lens runs the REAL external tools (containers,
   real binaries, real DBs) against the fixtures — mocked tests cannot see
   wrong-API or wrong-format bugs.
-- `.agents/skills/` is untracked here (template-actions gitignores it); the
-  session-protocol files (`.session.md`, `AGENTS.md`, `CLAUDE.md`) sync from
+- `.agents/skills/` is intentionally tracked even though `.agents/` remains
+  ignored: force-add intended protocol updates so `.claude -> .agents` stays
+  valid in GitHub's committed action archive. Session-protocol files sync from
   ~/code/ai and are prettier-ignored. All markdown under docs/ must satisfy
   prettier proseWrap: always at 80 columns or `moon run root:check` fails.
