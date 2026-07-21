@@ -155,3 +155,14 @@ attestations pushed and gh attestation verify PASSED. Squash e49388b.
 All of plan Phases 0-5 landed as PRs #7-#12; v1 acceptance demonstrated by
 the integration workflow + 208-test unit suite. Post-v1 items: one external
 signing backend on demand; release via release-please (no release cut yet).
+
+## 2026-07-21 00:55 — Close
+Session closed. All work merged: PR #6 (design/plan review fixes) and PRs
+#7-#12 (plan Phases 0-5, squash commits 60063ec, 6c7f497, 48c5a10, 6d48fa4,
+962ef5d, e49388b). v1 complete and proven by integration + sign-image CI
+jobs (real attestations, gh attestation verify green). Local main
+fast-forwarded to e49388b; all implementation worktrees removed. SUMMARY.md
+written; TECH_NOTES.md updated with durable context (overrides, gotchas,
+integration-image requirements, workflow craft). Hand-off: triage the
+release-please release PR and the four open Dependabot PRs (#1-#4); post-v1
+slice 3 awaits consumer demand.
