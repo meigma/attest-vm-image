@@ -1,0 +1,207 @@
+// Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
+
+exports[`predicate.ts buildStatement assembles the full statement from a populated state (snapshot) 1`] = `
+{
+  "_type": "https://in-toto.io/Statement/v1",
+  "predicate": {
+    "artifact": {
+      "name": "disk.qcow2",
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "sizeBytes": 536870912,
+    },
+    "buildManifest": {
+      "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    },
+    "checks": [
+      {
+        "detail": "File is present but empty: /etc/machine-id",
+        "id": "no-machine-id",
+        "status": "pass",
+        "title": "Machine identity is cleared for regeneration",
+      },
+      {
+        "detail": "No path matched glob: /etc/ssh/ssh_host_*_key*",
+        "id": "no-ssh-host-keys",
+        "status": "pass",
+        "title": "Persisted SSH host keys are absent",
+      },
+    ],
+    "incusMetadata": {
+      "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    },
+    "operatingSystem": {
+      "arch": "x86_64",
+      "id": "ubuntu",
+      "prettyName": "Ubuntu 22.04.4 LTS",
+      "versionId": "22.04",
+    },
+    "policy": {
+      "id": "builtin/v1",
+    },
+    "result": "pass",
+    "sbom": {
+      "format": "spdx-json",
+      "sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    },
+    "schemaVersion": "1",
+    "tools": [
+      {
+        "name": "syft",
+        "version": "1.48.0",
+      },
+      {
+        "name": "grype",
+        "version": "0.116.0",
+      },
+      {
+        "name": "qemu-utils",
+        "version": "1:8.2.2+ds-0ubuntu1",
+      },
+      {
+        "name": "libguestfs-tools",
+        "version": "1:1.52.0-1ubuntu1",
+      },
+      {
+        "name": "attest-vm-image",
+        "version": "0.1.0",
+      },
+    ],
+    "vulnerabilities": {
+      "dbVersion": "schema v6.1.9, built 2026-07-19T01:23:45Z",
+      "scanner": "grype",
+      "sha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "summary": {
+        "critical": 0,
+        "high": 0,
+        "low": 1,
+        "medium": 2,
+        "negligible": 0,
+        "unknown": 0,
+      },
+      "threshold": "high",
+      "thresholdExceeded": false,
+    },
+    "workflow": {
+      "actor": "octocat",
+      "eventName": "push",
+      "ref": "refs/heads/main",
+      "repository": "meigma/attest-vm-image",
+      "runAttempt": "1",
+      "runId": "42",
+      "sha": "0123456789abcdef0123456789abcdef01234567",
+    },
+  },
+  "predicateType": "https://meigma.github.io/attest-vm-image/predicate/vm-image-validation/v1",
+  "subject": [
+    {
+      "digest": {
+        "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      },
+      "name": "disk.qcow2",
+    },
+  ],
+}
+`;
+
+exports[`predicate.ts buildStatement result computation is fail when any contamination check fails (snapshot) 1`] = `
+{
+  "_type": "https://in-toto.io/Statement/v1",
+  "predicate": {
+    "artifact": {
+      "name": "disk.qcow2",
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "sizeBytes": 536870912,
+    },
+    "buildManifest": {
+      "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    },
+    "checks": [
+      {
+        "detail": "File is present and non-empty: /etc/machine-id",
+        "id": "no-machine-id",
+        "status": "fail",
+        "title": "Machine identity is cleared for regeneration",
+      },
+      {
+        "detail": "No path matched glob: /etc/ssh/ssh_host_*_key*",
+        "id": "no-ssh-host-keys",
+        "status": "pass",
+        "title": "Persisted SSH host keys are absent",
+      },
+    ],
+    "incusMetadata": {
+      "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    },
+    "operatingSystem": {
+      "arch": "x86_64",
+      "id": "ubuntu",
+      "prettyName": "Ubuntu 22.04.4 LTS",
+      "versionId": "22.04",
+    },
+    "policy": {
+      "id": "builtin/v1",
+    },
+    "result": "fail",
+    "sbom": {
+      "format": "spdx-json",
+      "sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    },
+    "schemaVersion": "1",
+    "tools": [
+      {
+        "name": "syft",
+        "version": "1.48.0",
+      },
+      {
+        "name": "grype",
+        "version": "0.116.0",
+      },
+      {
+        "name": "qemu-utils",
+        "version": "1:8.2.2+ds-0ubuntu1",
+      },
+      {
+        "name": "libguestfs-tools",
+        "version": "1:1.52.0-1ubuntu1",
+      },
+      {
+        "name": "attest-vm-image",
+        "version": "0.1.0",
+      },
+    ],
+    "vulnerabilities": {
+      "dbVersion": "schema v6.1.9, built 2026-07-19T01:23:45Z",
+      "scanner": "grype",
+      "sha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "summary": {
+        "critical": 0,
+        "high": 0,
+        "low": 1,
+        "medium": 2,
+        "negligible": 0,
+        "unknown": 0,
+      },
+      "threshold": "high",
+      "thresholdExceeded": false,
+    },
+    "workflow": {
+      "actor": "octocat",
+      "eventName": "push",
+      "ref": "refs/heads/main",
+      "repository": "meigma/attest-vm-image",
+      "runAttempt": "1",
+      "runId": "42",
+      "sha": "0123456789abcdef0123456789abcdef01234567",
+    },
+  },
+  "predicateType": "https://meigma.github.io/attest-vm-image/predicate/vm-image-validation/v1",
+  "subject": [
+    {
+      "digest": {
+        "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      },
+      "name": "disk.qcow2",
+    },
+  ],
+}
+`;
