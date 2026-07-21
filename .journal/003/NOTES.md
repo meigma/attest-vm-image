@@ -58,3 +58,25 @@ before temporary-repository teardown. The local temporary checkout was moved to
 Trash. The remote repository remains private because GitHub requires sudo-mode
 security-key reauthentication for deletion; the browser is left at that
 account-holder handoff.
+
+## 2026-07-21 11:12 — External packaging blocker fixed
+
+The user confirmed that `.agents` is intended committed repository content and
+asked for the acceptance blocker to be fixed. The minimal repair is commit
+`f00c5ca56cbf1dcedf53ee4288d263bf887c146e` on
+`feat/commit-agent-skills`: it force-adds the 11 audited session-protocol files
+under `.agents/skills` while preserving the template's `.agents/` ignore rule
+for unrelated local runtime state. The files match `~/code/ai` and
+`template-go` byte-for-byte; `.gitignore`, source, and `dist/` are unchanged.
+
+Local `moon run root:check` passed all seven tasks and 208 tests. Extracting a
+real `git archive` proved that it now contains all 11 files and that the tracked
+`.claude -> .agents` symlink resolves inside the archive.
+
+The exact external-consumer regression passed in disposable-repository run
+`29856005522`: GitHub staged
+`meigma/attest-vm-image@f00c5ca56cbf1dcedf53ee4288d263bf887c146e`,
+entered the bundled action, produced its expected output directory, and then
+hit only the deliberately missing-manifest error. The temporary smoke workflow
+was removed immediately afterward. PR #13 is ready for review with CI,
+build-image, sign-image, and Kusari Inspector all green.
