@@ -29,3 +29,24 @@ for user approval before writing anything. Ultracode is enabled.
 Launched survey workflow wf_d9ab38d3-20a: five Sonnet readers over interface,
 design docs, runtime code, signing/verification, and operator usage patterns.
 Next: synthesize doc plan, critique it, present proposal.
+
+## 2026-07-21 14:32 — Doc plan drafted, surveyed, and critiqued
+
+Survey workflow wf_d9ab38d3-20a (5 Sonnet readers, ~509k tokens) mapped the
+action: interface, design docs (drift found: tools-array names, no cosign
+verify of syft/grype, GRYPE_DB_CACHE_DIR not an input), runtime, signing
+(billing-plan classifier gap confirmed in code), operator usage (timings,
+integration matrix; README @v0 pin vs v1.0.0 release target inconsistency).
+Reports in scratchpad/survey-*.md.
+
+Drafted a 7-doc Diátaxis plan (scratchpad/doc-plan-draft.md); critique
+workflow wf_d3584faa-91e (3 Sonnet lenses) returned needs-changes on all
+three but endorsed the 7-doc split unanimously. Key fixes folded in:
+tutorial ends after the unsigned run (signing has plan/fork obstacles);
+error catalog moves into reference.md; reference.md owns all shared facts
+(attestation table, builtin/v1 policy as copy-paste JSON, requirements,
+metadata archive rules, predicate/report diff); README keeps BOTH minimal
+examples; SPDX predicateType instability callout; GRYPE_DB_CACHE_DIR gets a
+home; uses:-pin rule applies to all docs. docs/predicate/ kept (unit test
+asserts schema $id == PREDICATE_TYPE). Presenting plan to user for approval
+before any writing.
