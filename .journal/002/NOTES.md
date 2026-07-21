@@ -84,3 +84,16 @@ session model). Per-phase loop: worktree from main -> workflow (implement ->
 3-lens adversarial verify -> fix) -> commit -> PR -> checks -> squash merge.
 Phase 0 worktree feat/phase0-template-conversion created; baseline root:check
 green; workflow wf_d7a4bf13-6b4 launched.
+
+## 2026-07-20 20:15 — Phase 0 merged (PR #7)
+Workflow wf_d7a4bf13-6b4 implemented Phase 0; review restored root:audit with
+scoped allowlist. Kusari then flagged the allowlisted GHSA-jfc7-64v2-mr8c
+(DSSE type-binding CVE in @sigstore/core@2 via @actions/attest) as fixable:
+resolved properly via package.json overrides forcing @sigstore/sign@^5 +
+@sigstore/bundle@^5 (API surface verified compatible: same named exports,
+constructor options, v0.3 bundle media type) -> @sigstore/core@4.0.1; audit
+allowlist now empty. Jest ESM-import smoke test failed on CI (require(ESM)
+needs Node 24.9+); replaced with lockfile version assertions. PR #7 squash-
+merged. Lesson: workflow args arrived as JSON string -> ${WT} interpolated as
+"undefined" in agent prompts (session-001 lesson recurred); agents recovered
+via branch name. Parse string args in all future workflow scripts.
