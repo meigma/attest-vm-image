@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.2.0](https://github.com/meigma/attest-vm-image/compare/v1.1.0...v1.2.0) (2026-07-22)
+
+
+### Features
+
+* **signing:** add cosign key backend ([#22](https://github.com/meigma/attest-vm-image/issues/22)) ([ef6189c](https://github.com/meigma/attest-vm-image/commit/ef6189c95f327294084d4494f1661aa01d9d5431))
+* **signing:** add kms backend ([#24](https://github.com/meigma/attest-vm-image/issues/24)) ([b3472cf](https://github.com/meigma/attest-vm-image/commit/b3472cf53aaa60ba6b6a09239e0d726a3cbf12f5))
+* **signing:** add sigstore keyless backend ([#23](https://github.com/meigma/attest-vm-image/issues/23)) ([5f871a2](https://github.com/meigma/attest-vm-image/commit/5f871a2adb8fee69f000824702d021d27f6c7066))
+
+
+### Bug Fixes
+
+* **signing:** harden external backend handoff ([#25](https://github.com/meigma/attest-vm-image/issues/25)) ([f3a6be1](https://github.com/meigma/attest-vm-image/commit/f3a6be1f8a4b6787be3c40477edce809ef588bc8))
+
 ## [1.1.0](https://github.com/meigma/attest-vm-image/compare/v1.0.0...v1.1.0) (2026-07-22)
 
 
