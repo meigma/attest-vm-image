@@ -686,7 +686,7 @@ creates local, offline bundles.
   — remove or choose a fresh `output-directory`; the signer never overwrites an
   earlier bundle set.
 - `Cosign produced an unexpected bundle media type.` /
-  `Cosign bundle is missing transparency-log metadata.` /
+  `Cosign bundle has invalid transparency-log metadata.` /
   `Cosign unexpectedly published transparency-log material for signer "cosign-key".`
   — Cosign's output violated the offline bundle contract. Nothing is promoted;
   retain logs and investigate the binary/configuration before retrying.

@@ -83,7 +83,7 @@ describe('CosignKeySigner', () => {
     outputDir: dir
   })
 
-  function installSuccessfulExecMock(tlogEntries: unknown[] = []): void {
+  function installSuccessfulExecMock(tlogEntries?: unknown[]): void {
     exec.mockImplementation(async (_cmd, args = []) => {
       if (args[0] === 'public-key') {
         writeFileSync(flag(args, '--outfile'), 'PUBLIC KEY')
@@ -99,7 +99,8 @@ describe('CosignKeySigner', () => {
             dsseEnvelope: {
               payload: Buffer.from(JSON.stringify(statement)).toString('base64')
             },
-            verificationMaterial: { tlogEntries }
+            verificationMaterial:
+              tlogEntries === undefined ? {} : { tlogEntries }
           })
         )
       }
@@ -155,6 +156,18 @@ describe('CosignKeySigner', () => {
       )
       expect(JSON.stringify(opts)).not.toContain('/secret/cosign.key')
     }
+  })
+
+  it('accepts Cosign v0.3 omitting an empty tlogEntries field', async () => {
+    const result = await new CosignKeySigner('/secret/cosign.key').sign(
+      context()
+    )
+
+    const bundle = JSON.parse(readFileSync(result.bundles[0].path, 'utf8')) as {
+      verificationMaterial: object
+    }
+    expect(bundle.verificationMaterial).not.toHaveProperty('tlogEntries')
+    expect(result.bundles).toHaveLength(3)
   })
 
   it('passes env://NAME as a reference without putting it in log labels', async () => {

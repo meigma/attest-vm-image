@@ -83542,10 +83542,15 @@ async function assertBundle(bundlePath, intendedStatement) {
     if (bundle.mediaType !== BUNDLE_MEDIA_TYPE) {
         throw new Error(`Cosign produced an unexpected bundle media type.`);
     }
-    if (!Array.isArray(bundle.verificationMaterial?.tlogEntries)) {
-        throw new Error('Cosign bundle is missing transparency-log metadata.');
+    // Sigstore bundle JSON omits empty repeated fields, so v0.3 key-backed
+    // bundles may carry no `tlogEntries` property at all. Omitted and [] both
+    // mean zero entries; any present non-array value or non-empty array violates
+    // this backend's explicit no-transparency contract.
+    const tlogEntries = bundle.verificationMaterial?.tlogEntries;
+    if (tlogEntries !== undefined && !Array.isArray(tlogEntries)) {
+        throw new Error('Cosign bundle has invalid transparency-log metadata.');
     }
-    if (bundle.verificationMaterial.tlogEntries.length !== 0) {
+    if (Array.isArray(tlogEntries) && tlogEntries.length !== 0) {
         throw new Error('Cosign unexpectedly published transparency-log material for signer "cosign-key".');
     }
     if (typeof bundle.dsseEnvelope?.payload !== 'string') {
