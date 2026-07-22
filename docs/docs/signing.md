@@ -271,9 +271,11 @@ fail input validation.
 
 These five forms are supported by the action's URI contract and are derived from
 the Cosign `v3.1.2` provider parsers. The validation and dispatch paths are
-unit-tested, but they have not yet been field-tested against live provider keys
-in this repository. Do not interpret support as a claim that every provider's
-IAM and service configuration has been exercised here.
+unit-tested. AWS KMS has also been field-tested with an immutable asymmetric key
+and short-lived GitHub OIDC credentials. Google Cloud KMS, Azure Key Vault,
+HashiCorp Vault, and OpenBao have not yet been field-tested here; do not
+interpret URI support as a claim that every provider's IAM and service
+configuration has been exercised.
 
 ### Authenticate in a preceding step
 

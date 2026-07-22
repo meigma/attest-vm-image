@@ -41,7 +41,7 @@ Notes:
 
 | Provider         | Accepted form                                                        | Live validation status                         |
 | ---------------- | -------------------------------------------------------------------- | ---------------------------------------------- |
-| AWS KMS          | `awskms:///arn:PARTITION:kms:REGION:ACCOUNT:key/UUID`                | URI contract supported; field testing pending. |
+| AWS KMS          | `awskms:///arn:PARTITION:kms:REGION:ACCOUNT:key/UUID`                | Live field test passed with GitHub OIDC.       |
 | Google Cloud KMS | `gcpkms://projects/P/locations/L/keyRings/R/cryptoKeys/K/versions/N` | URI contract supported; field testing pending. |
 | Azure Key Vault  | `azurekms://VAULT.vault.azure.net/KEY/VERSION`                       | URI contract supported; field testing pending. |
 | HashiCorp Vault  | `hashivault://KEY`                                                   | URI contract supported; field testing pending. |
