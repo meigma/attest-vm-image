@@ -136,11 +136,12 @@ is slow.
 ### Problem: tool or database downloads fail
 
 The action needs outbound access to download the pinned `syft` and `grype`
-binaries, plus `cosign` when `signer: cosign-key` is selected, from `github.com`
-release assets and to fetch the Grype vulnerability database at scan time.
-Symptoms are an integrity or download error while fetching a binary, or a Grype
-scan error — see the vulnerability-scan and tool-acquisition entries in
-[Failure modes](reference.md#failure-modes).
+binaries, plus `cosign` when `signer: sigstore-keyless` or `cosign-key` is
+selected, from `github.com` release assets and to fetch the Grype vulnerability
+database at scan time. Keyless signing also needs GitHub OIDC and the public
+Sigstore services. Symptoms are an integrity or download error while fetching a
+binary, a Grype scan error, or a signing-service failure — see the corresponding
+entries in [Failure modes](reference.md#failure-modes).
 
 **Solution:** Allow egress to the endpoints listed under
 [Requirements](reference.md#requirements). On locked-down or air-gapped runners,
@@ -174,17 +175,30 @@ cannot sign.
 **Solution:** Run signing on pushes or on same-repository pull requests only.
 See [Publish signed attestations](signing.md).
 
+### Problem: `signer: sigstore-keyless` names missing `id-token: write`
+
+The action could not find GitHub's OIDC request URL and token. This happens when
+the job omits `id-token: write` or runs for a fork pull request. The check runs
+before tool download or disk access, so the named permission error is expected
+even when `disk-path` would fail later.
+
+**Solution:** Grant `contents: read` and `id-token: write`, and run keyless
+signing only on a trusted same-repository event. Do not grant
+`attestations: write`; keyless signing does not use the GitHub attestation API.
+See [Sign with public Sigstore keyless identity](signing.md).
+
 ### Problem: an unimplemented signer throws only on a passing image
 
-`sigstore-keyless` and `kms` pass their initial input validation but throw when
-the signing step is reached. Signing runs only on a passing result, so the same
-workflow configuration fails differently depending on the image: on a failing
-image it fails with the ordinary evidence-complete-failure message (signing is
-skipped, so no signer-related error appears); on a passing image the signer is
-actually reached and throws the "not yet implemented" diagnostic instead.
+`kms` passes its initial input validation but throws when the signing step is
+reached. Signing runs only on a passing result, so the same workflow
+configuration fails differently depending on the image: on a failing image it
+fails with the ordinary evidence-complete-failure message (signing is skipped,
+so no signer-related error appears); on a passing image the signer is actually
+reached and throws the "not yet implemented" diagnostic instead.
 
-**Solution:** Use `signer: none`, `signer: github`, or `signer: cosign-key`. See
-the signer entry in [Failure modes](reference.md#failure-modes).
+**Solution:** Use `signer: none`, `signer: github`, `signer: sigstore-keyless`,
+or `signer: cosign-key`. See the signer entry in
+[Failure modes](reference.md#failure-modes).
 
 ### Problem: signing failed but the evidence looks complete
 

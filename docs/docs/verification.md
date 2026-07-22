@@ -20,8 +20,9 @@ the operator task in [signing.md](signing.md).
 - The GitHub CLI (`gh`) with `gh attestation` support, authenticated with
   `gh auth login` or a `GH_TOKEN`. Commands here were tested with `gh` 2.94.0.
 - `jq` if you want to extract predicate JSON for a downstream policy engine.
-- For `cosign-key` bundles, Cosign `v3.1.2` and the signer's public key obtained
-  through an independently trusted channel.
+- For `sigstore-keyless` or `cosign-key` bundles, Cosign `v3.1.2`. Key-backed
+  verification also needs the signer's public key obtained through an
+  independently trusted channel.
 
 Throughout, `<owner>/<repo>` is the repository that **ran** `attest-vm-image`
 and published the attestations — the image builder's repository, not
@@ -52,6 +53,46 @@ they carry their own Sigstore verification material (see
 
 If the run was unsigned (`signer: none`), stop here — there are no attestations
 to verify.
+
+## Verify `sigstore-keyless` bundles
+
+Use this when the producer selected `signer: sigstore-keyless`. Pin the exact
+workflow certificate identity; never replace it with a permissive regular
+expression. `<REF>` is the full ref present in the signing workflow identity,
+such as `refs/heads/main`.
+
+```bash
+hex="$(sha256sum disk.qcow2 | awk '{print $1}')"
+identity='https://github.com/OWNER/REPO/.github/workflows/WORKFLOW.yml@REF'
+issuer='https://token.actions.githubusercontent.com'
+
+cosign verify-blob-attestation \
+  --bundle evidence/attestations/provenance.sigstore.json \
+  --certificate-identity "$identity" \
+  --certificate-oidc-issuer "$issuer" \
+  --digest "$hex" --digestAlg sha256 \
+  --type https://slsa.dev/provenance/v1
+
+cosign verify-blob-attestation \
+  --bundle evidence/attestations/sbom.sigstore.json \
+  --certificate-identity "$identity" \
+  --certificate-oidc-issuer "$issuer" \
+  --digest "$hex" --digestAlg sha256 \
+  --type https://spdx.dev/Document/v2.3
+
+cosign verify-blob-attestation \
+  --bundle evidence/attestations/validation.sigstore.json \
+  --certificate-identity "$identity" \
+  --certificate-oidc-issuer "$issuer" \
+  --digest "$hex" --digestAlg sha256 \
+  --type https://meigma.github.io/attest-vm-image/predicate/vm-image-validation/v1
+```
+
+For CycloneDX, replace the SBOM type with `https://cyclonedx.org/bom`. All three
+commands must exit `0`; Cosign verifies the exact identity and issuer, the
+signature and public-log inclusion, the predicate type, and the disk digest in
+the statement subject. A changed image, changed bundle, wrong workflow identity,
+or wrong issuer must fail.
 
 ## Verify `cosign-key` bundles
 

@@ -33,6 +33,8 @@ describe('inputs.ts', () => {
     jest.resetAllMocks()
     delete process.env.COSIGN_PASSWORD
     delete process.env.COSIGN_PRIVATE_KEY
+    delete process.env.ACTIONS_ID_TOKEN_REQUEST_URL
+    delete process.env.ACTIONS_ID_TOKEN_REQUEST_TOKEN
   })
 
   it('applies defaults when only disk-path is provided', () => {
@@ -121,6 +123,24 @@ describe('inputs.ts', () => {
     withInputs({ 'disk-path': 'disk.qcow2', signer: 'github' })
 
     expect(() => parseInputs()).not.toThrow()
+  })
+
+  it('accepts sigstore-keyless only when the OIDC request environment is available', () => {
+    process.env.ACTIONS_ID_TOKEN_REQUEST_URL =
+      'https://token.actions.githubusercontent.com/request'
+    process.env.ACTIONS_ID_TOKEN_REQUEST_TOKEN = 'oidc-request-token'
+    withInputs({ 'disk-path': 'disk.qcow2', signer: 'sigstore-keyless' })
+
+    expect(parseInputs().signer).toBe('sigstore-keyless')
+    expect(core.setSecret).toHaveBeenCalledWith('oidc-request-token')
+  })
+
+  it('fails sigstore-keyless immediately with a named id-token diagnostic', () => {
+    withInputs({ 'disk-path': 'disk.qcow2', signer: 'sigstore-keyless' })
+
+    expect(() => parseInputs()).toThrow(
+      'signer "sigstore-keyless" requires the job permission id-token: write; the GitHub Actions OIDC request environment is unavailable.'
+    )
   })
 
   it('reads the github-token input', () => {
@@ -224,12 +244,14 @@ describe('inputs.ts', () => {
     })
     expect(() => parseInputs()).toThrow(/never raw private-key bytes/)
 
-    withInputs({
-      'disk-path': 'disk.qcow2',
-      signer: 'github',
-      'signing-key': 'cosign.key'
-    })
-    expect(() => parseInputs()).toThrow(/does not accept signing-key/)
+    for (const signer of ['github', 'sigstore-keyless']) {
+      withInputs({
+        'disk-path': 'disk.qcow2',
+        signer,
+        'signing-key': 'cosign.key'
+      })
+      expect(() => parseInputs()).toThrow(/does not accept signing-key/)
+    }
   })
 
   it('rejects an unreadable policy-path', () => {

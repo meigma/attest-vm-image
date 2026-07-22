@@ -1,7 +1,7 @@
 # How to sign attestations
 
-Switch a working unsigned run to either GitHub-published attestations or
-portable bundles signed with an encrypted Cosign key.
+Switch a working unsigned run to GitHub-published attestations, public Sigstore
+keyless bundles, or portable bundles signed with an encrypted Cosign key.
 
 ## Prerequisites
 
@@ -12,15 +12,19 @@ portable bundles signed with an encrypted Cosign key.
   [how-it-works.md](how-it-works.md) for why this matters).
 - For `signer: github`, a repository whose plan and visibility can issue
   attestations. Check the matrix below.
+- For `signer: sigstore-keyless`, a same-repository GitHub Actions run whose
+  repository, workflow, ref, commit, run, and certificate identity may be
+  disclosed permanently through public Sigstore transparency services.
 - For `signer: cosign-key`, Cosign `v3.1.2` on the administrator machine that
   creates the key, plus a separate trusted way to distribute `cosign.pub`.
 
 ## Choose a signing backend
 
-| Backend      | Use it when                                               | Public service                                  |
-| ------------ | --------------------------------------------------------- | ----------------------------------------------- |
-| `github`     | The repository can use GitHub's attestation API.          | GitHub OIDC and the GitHub attestation API.     |
-| `cosign-key` | A private repository needs portable, key-trusted bundles. | None while signing; bundles stay on the runner. |
+| Backend            | Use it when                                               | Public service                                  |
+| ------------------ | --------------------------------------------------------- | ----------------------------------------------- |
+| `github`           | The repository can use GitHub's attestation API.          | GitHub OIDC and the GitHub attestation API.     |
+| `sigstore-keyless` | Verifiers should trust an exact workflow identity.        | GitHub OIDC, Fulcio, Rekor, CT, and TUF.        |
+| `cosign-key`       | A private repository needs portable, key-trusted bundles. | None while signing; bundles stay on the runner. |
 
 Both modes create the same three stable bundle roles. Only `github` publishes
 them and sets `attestation-url`.
@@ -130,6 +134,53 @@ check from the same runner is:
   run: gh attestation verify build/disk.qcow2 --repo ${{ github.repository }}
 ```
 
+## Sign with public Sigstore keyless identity
+
+Use this mode when GitHub's attestation API is unavailable but the exact GitHub
+Actions workflow identity is an acceptable public trust anchor. This mode does
+not need `attestations: write` or a managed private key.
+
+### 1. Confirm public disclosure is acceptable
+
+Each successful bundle creates a permanent public Sigstore transparency entry.
+The complete statement remains in the retained bundle, while the certificate and
+public log disclose the repository, workflow, ref, commit, event, run, and
+certificate identity. Use `cosign-key` instead when any of that identity is
+confidential.
+
+### 2. Grant only OIDC permission
+
+```yaml
+jobs:
+  attest:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      # Earlier steps build build/disk.qcow2.
+      - uses: meigma/attest-vm-image@v1
+        with:
+          disk-path: build/disk.qcow2
+          signer: sigstore-keyless
+```
+
+The action checks GitHub's OIDC request environment before downloading Cosign or
+reading the disk. It forces Cosign's noninteractive `github-actions` OIDC
+provider, signs all three complete statements, and requires one public
+transparency entry in each bundle.
+
+### 3. Retain and verify the bundles
+
+`attestation-bundle-path` points to the local `attestations/` directory.
+`attestation-url` remains unset because the GitHub attestation API was not used.
+Verification must pin the exact workflow identity and GitHub issuer; follow
+[Verify keyless bundles](verification.md#verify-sigstore-keyless-bundles).
+
+Remote signing cannot be rolled back. If the second or third signing operation
+fails, no partial bundle directory is exposed, but any earlier public
+transparency entry remains permanent.
+
 ## Sign with an encrypted Cosign key
 
 This mode is intended for private repositories that cannot or do not want to use
@@ -236,16 +287,18 @@ unchanged; it means the **same** plan or visibility restriction. Both are
 cataloged in [reference](reference.md#failure-modes). Move the image to an
 eligible repository (see the matrix above).
 
-### The run failed on a fork pull request
+### The run failed on a fork pull request or missing OIDC permission
 
-Fork pull requests have no OIDC token, so `signer: github` cannot run. Run the
-signing job on same-repository pushes or same-repo pull requests only, for
-example by gating the job on the head repository matching the base repository.
+Fork pull requests have no OIDC token, so `signer: github` and
+`signer: sigstore-keyless` cannot run. Keyless input validation names the
+missing `id-token: write` permission before any tool or disk access. Run the
+signing job on same-repository pushes or same-repo pull requests and grant the
+permission shown above.
 
 ### The run failed with a "not yet implemented" signer error
 
-`sigstore-keyless` and `kms` remain later slices. Selecting either throws when
-the signing step is reached on a passing result. Use `github`, `cosign-key`, or
+`kms` remains a later slice. Selecting it throws when the signing step is
+reached on a passing result. Use `github`, `sigstore-keyless`, `cosign-key`, or
 `none` ([reference](reference.md#failure-modes)).
 
 ## Related

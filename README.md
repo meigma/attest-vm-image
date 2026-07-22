@@ -56,6 +56,22 @@ steps:
     with: { disk-path: build/disk.qcow2, signer: github }
 ```
 
+To create portable bundles with GitHub Actions identity but without GitHub's
+attestation API, grant only OIDC and select public Sigstore keyless signing:
+
+```yaml
+permissions:
+  contents: read
+  id-token: write
+steps:
+  - uses: meigma/attest-vm-image@v1
+    with: { disk-path: build/disk.qcow2, signer: sigstore-keyless }
+```
+
+Keyless signing permanently publishes the repository, workflow, ref, commit,
+run, and certificate identity to public Sigstore transparency services. Use an
+encrypted Cosign key instead when that identity must remain private.
+
 Private repositories that cannot use GitHub's attestation API can produce
 portable, offline bundles with an encrypted Cosign key instead. Keep the private
 key and password in GitHub Secrets and distribute `cosign.pub` to verifiers
@@ -88,8 +104,9 @@ Every input and output is listed in the [reference][reference].
   the runner must permit `apt-get` and passwordless `sudo` — hosted `ubuntu-*`
   runners qualify by default.
 - Outbound network access to `github.com` for the pinned `syft`, `grype`, and
-  (when `signer: cosign-key`) `cosign` binaries, to the Grype vulnerability
-  database, and — for `signer: github` — to the GitHub attestation API.
+  external-signing `cosign` binaries, to the Grype vulnerability database, to
+  the GitHub attestation API for `signer: github`, and to GitHub OIDC plus the
+  public Sigstore services for `signer: sigstore-keyless`.
 
 The full runner, privilege, and network catalog is in the
 [reference][requirements].
@@ -98,8 +115,8 @@ The full runner, privilege, and network catalog is in the
 
 - [Getting started][getting-started] — tutorial: wire the action into a
   workflow, produce a folder of evidence, and verify it yourself.
-- [Publish signed attestations][signing] — how-to: publish with GitHub or create
-  offline bundles with an encrypted Cosign key.
+- [Publish signed attestations][signing] — how-to: publish with GitHub, public
+  Sigstore keyless identity, or an encrypted Cosign key.
 - [Verify evidence and attestations][verification] — how-to: verify checksums
   and published attestations as a downstream consumer.
 - [Control what fails validation][validation-policy] — how-to: tune the

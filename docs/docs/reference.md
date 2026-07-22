@@ -28,8 +28,8 @@ default or a built-in fallback.
 
 Notes:
 
-- `signer`: `none`, `github`, and `cosign-key` are implemented.
-  `sigstore-keyless` and `kms` fail closed by name when signing is reached.
+- `signer`: `none`, `github`, `sigstore-keyless`, and `cosign-key` are
+  implemented. `kms` fails closed by name when signing is reached.
 - `cosign-key` also requires a non-empty `COSIGN_PASSWORD` environment variable.
   An `env://NAME` reference must name a non-empty environment variable. Both
   resolved secret values are masked before any tools run.
@@ -42,20 +42,21 @@ Notes:
 Inputs are validated up front, before any tool runs. The first invalid input
 fails closed with a distinct message:
 
-| Condition                                               | Message                                                                                        |
-| ------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| `disk-path` empty or unset                              | `disk-path is required but was not provided.`                                                  |
-| `sbom-format` not in the allowed set                    | `sbom-format must be one of spdx-json, cyclonedx-json; got "<value>".`                         |
-| `fail-on-severity` not in the allowed set               | `fail-on-severity must be one of critical, high, none; got "<value>".`                         |
-| `signer` not in the allowed set                         | `signer must be one of none, github, sigstore-keyless, cosign-key, kms; got "<value>".`        |
-| `signer` is `cosign-key` or `kms` with no `signing-key` | `signer "<signer>" requires a signing-key reference, but none was provided.`                   |
-| `signing-key` supplied to a signer that does not use it | `signer "<signer>" does not accept signing-key; remove the contradictory input.`               |
-| `signing-key` appears to contain private-key bytes      | `signing-key must be a key reference, never raw private-key bytes.`                            |
-| `cosign-key` reference is not a file or `env://NAME`    | `signer "cosign-key" requires signing-key to be a readable encrypted key file or env://NAME.`  |
-| `cosign-key` file is missing or unreadable              | `signer "cosign-key" signing-key file does not exist or is not readable.`                      |
-| `cosign-key` environment variable is empty              | `signing-key references environment variable <NAME>, but it is unset or empty.`                |
-| `COSIGN_PASSWORD` is empty                              | `signer "cosign-key" requires the COSIGN_PASSWORD environment variable for the encrypted key.` |
-| `policy-path` set but missing or unreadable             | `policy-path "<path>" does not exist or is not readable.`                                      |
+| Condition                                               | Message                                                                                                                              |
+| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `disk-path` empty or unset                              | `disk-path is required but was not provided.`                                                                                        |
+| `sbom-format` not in the allowed set                    | `sbom-format must be one of spdx-json, cyclonedx-json; got "<value>".`                                                               |
+| `fail-on-severity` not in the allowed set               | `fail-on-severity must be one of critical, high, none; got "<value>".`                                                               |
+| `signer` not in the allowed set                         | `signer must be one of none, github, sigstore-keyless, cosign-key, kms; got "<value>".`                                              |
+| `signer` is `cosign-key` or `kms` with no `signing-key` | `signer "<signer>" requires a signing-key reference, but none was provided.`                                                         |
+| `signing-key` supplied to a signer that does not use it | `signer "<signer>" does not accept signing-key; remove the contradictory input.`                                                     |
+| `signing-key` appears to contain private-key bytes      | `signing-key must be a key reference, never raw private-key bytes.`                                                                  |
+| `cosign-key` reference is not a file or `env://NAME`    | `signer "cosign-key" requires signing-key to be a readable encrypted key file or env://NAME.`                                        |
+| `cosign-key` file is missing or unreadable              | `signer "cosign-key" signing-key file does not exist or is not readable.`                                                            |
+| `cosign-key` environment variable is empty              | `signing-key references environment variable <NAME>, but it is unset or empty.`                                                      |
+| `COSIGN_PASSWORD` is empty                              | `signer "cosign-key" requires the COSIGN_PASSWORD environment variable for the encrypted key.`                                       |
+| Keyless OIDC request environment is unavailable         | `signer "sigstore-keyless" requires the job permission id-token: write; the GitHub Actions OIDC request environment is unavailable.` |
+| `policy-path` set but missing or unreadable             | `policy-path "<path>" does not exist or is not readable.`                                                                            |
 
 Custom `policy-path` files are additionally parsed and structurally validated at
 this point; those messages are cataloged under [Failure modes](#failure-modes).
@@ -103,11 +104,12 @@ Notes:
 Required job permissions by signer. The action cannot grant these; the calling
 job must declare them.
 
-| `signer`     | `contents` | `id-token` | `attestations` |
-| ------------ | ---------- | ---------- | -------------- |
-| `none`       | `read`     | —          | —              |
-| `github`     | `read`     | `write`    | `write`        |
-| `cosign-key` | `read`     | —          | —              |
+| `signer`           | `contents` | `id-token` | `attestations` |
+| ------------------ | ---------- | ---------- | -------------- |
+| `none`             | `read`     | —          | —              |
+| `github`           | `read`     | `write`    | `write`        |
+| `sigstore-keyless` | `read`     | `write`    | —              |
+| `cosign-key`       | `read`     | —          | —              |
 
 Notes:
 
@@ -120,7 +122,11 @@ Notes:
   to a different signer (see [signing.md](signing.md) and
   [how-it-works.md](how-it-works.md)).
 - Fork pull requests receive a read-only token and no OIDC token, so
-  `signer: github` cannot run on a fork pull request.
+  `signer: github` and `signer: sigstore-keyless` cannot run on a fork pull
+  request.
+- `signer: sigstore-keyless` needs no GitHub API write permission. It uses the
+  job OIDC identity with public Sigstore services and leaves `attestation-url`
+  unset.
 - `signer: cosign-key` needs no OIDC or attestation API permission. The caller
   supplies an encrypted private key and password through runner-local state.
 
@@ -147,10 +153,13 @@ Notes:
   the action runs, which is too late for a preceding step.
 - **Network egress:** the action requires outbound access to:
   - `github.com` release assets — to download the pinned `syft`, `grype`, and,
-    only for `signer: cosign-key`, `cosign` binaries (see
+    for `signer: sigstore-keyless` or `cosign-key`, `cosign` binaries (see
     [Tool versions](#tool-versions)).
   - the Grype vulnerability database — downloaded at scan time.
   - the GitHub attestation API — only for `signer: github`.
+  - GitHub's Actions OIDC endpoint and the public Sigstore Fulcio, Rekor,
+    certificate-transparency, and TUF services — only for
+    `signer: sigstore-keyless`.
 - **`GRYPE_DB_CACHE_DIR`:** Grype honors this environment variable to pre-seed
   the vulnerability database on locked-down or air-gapped runners. It is not an
   action input; set it as a step- or job-level `env:` value and it passes
@@ -305,7 +314,11 @@ Notes:
 - The metadata tarball is a subject of the provenance attestation only, never of
   the SBOM or validation attestations.
 - `attestation-url` points at the validation attestation for `signer: github`;
-  it is unset for local `cosign-key` bundles.
+  it is unset for `sigstore-keyless` and local `cosign-key` bundles.
+- `sigstore-keyless` bundles use the Sigstore bundle v0.3 media type, contain
+  exactly one public transparency-log entry each, and self-verify against the
+  exact `${GITHUB_SERVER_URL}/${GITHUB_WORKFLOW_REF}` certificate identity and
+  `https://token.actions.githubusercontent.com` issuer before promotion.
 - `cosign-key` bundles use the Sigstore bundle v0.3 media type, contain no
   transparency-log entries, and are promoted only after all three signatures,
   subjects, and predicate types self-verify.
@@ -540,6 +553,10 @@ Placeholders written as `<...>` are interpolated at runtime.
   — set the named secret environment variable on the action step.
 - `signer "cosign-key" requires the COSIGN_PASSWORD environment variable for the encrypted key.`
   — set the key's password as a secret environment variable on the action step.
+- `signer "sigstore-keyless" requires the job permission id-token: write; the GitHub Actions OIDC request environment is unavailable.`
+  — the job did not grant OIDC permission, or the event is a fork pull request.
+  The action detects this before downloading tools or reading the disk. Grant
+  `id-token: write` and use a trusted same-repository event.
 - `policy-path "<path>" does not exist or is not readable.` — the `policy-path`
   file is missing or unreadable. Point it at a readable file.
 
@@ -665,8 +682,9 @@ disk-path error.
 
 ### Signing
 
-Signing runs only on a passing result. `github` publishes remotely; `cosign-key`
-creates local, offline bundles.
+Signing runs only on a passing result. `github` publishes remotely;
+`sigstore-keyless` creates local bundles with public Sigstore identity and
+transparency; `cosign-key` creates local, offline bundles.
 
 - `signer: github requires a GitHub token to push attestations to the GitHub attestation API. Provide the github-token input (it defaults to the job's ${{ github.token }} and must carry attestations: write), but it resolved empty.`
   — `github-token` resolved empty. Do not override it with an empty value; the
@@ -682,6 +700,9 @@ creates local, offline bundles.
   indicates the **same** plan/visibility restriction as the translated
   diagnostic. Remedy: identical — use a public repository or GitHub Enterprise
   Cloud.
+- `signer "sigstore-keyless" requires GITHUB_SERVER_URL and GITHUB_WORKFLOW_REF to construct its exact certificate identity.`
+  — the GitHub Actions workflow identity environment is incomplete. Run the
+  action inside GitHub Actions; no permissive identity fallback is used.
 - `attestation bundle directory "<path>" already exists; refusing to overwrite it.`
   — remove or choose a fresh `output-directory`; the signer never overwrites an
   earlier bundle set.
@@ -690,14 +711,18 @@ creates local, offline bundles.
   `Cosign unexpectedly published transparency-log material for signer "cosign-key".`
   — Cosign's output violated the offline bundle contract. Nothing is promoted;
   retain logs and investigate the binary/configuration before retrying.
+- `Cosign keyless bundle is missing its required public transparency-log entry.`
+  — keyless signing did not produce exactly one public Rekor entry. No bundle
+  directory is promoted, but an earlier successful entry from the same attempt
+  cannot be rolled back.
 - `Cosign bundle is missing its DSSE payload.` /
   `Cosign bundle payload does not match the intended statement.` — the bundle
   was incomplete or did not carry the exact statement supplied by the action.
   Nothing is promoted.
-- `signer "<signer>" is not yet implemented. This release supports "none", "github", and "cosign-key"; the remaining external backends (sigstore-keyless and kms) are later extension points, and this action never falls back to a different backend.`
-  — `sigstore-keyless` or `kms` was selected and reached (this throws only on a
-  passing result; a failing result skips signing). Remedy: use `none`, `github`,
-  or `cosign-key`.
+- `signer "kms" is not yet implemented. This release supports "none", "github", "sigstore-keyless", and "cosign-key"; the remaining external backend (kms) is a later extension point, and this action never falls back to a different backend.`
+  — `kms` was selected and reached (this throws only on a passing result; a
+  failing result skips signing). Remedy: use `none`, `github`,
+  `sigstore-keyless`, or `cosign-key`.
 
 ### Evidence-complete failure
 
