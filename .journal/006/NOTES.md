@@ -43,3 +43,11 @@ Validation passed: `moon run root:check` (format, lint, 212 tests, dist
 reproducibility, audit) and strict `moon run docs:build`. The committed `dist/`
 bundle includes the new Action behavior. No Simple Streams, S3, combined Incus
 fingerprint, upload, or publishing behavior was added.
+
+## 2026-07-21 19:35 — Pull request opened
+Pushed `feat/evidence-manifest` and opened PR #20,
+`feat: add evidence handoff manifest`, targeting `main` at exact head
+`61049a6f1d7aa2bd3883aaaeede77e7910cf277f`:
+https://github.com/meigma/attest-vm-image/pull/20. The PR is ready for review and
+mergeable; CI, GitHub Pages, both integration jobs, and Kusari Inspector started
+in progress.
