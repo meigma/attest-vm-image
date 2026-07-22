@@ -31,6 +31,7 @@ export interface ToolPin {
   version: string
   urlTemplate: string
   sha256: Record<PlatformKey, string>
+  format: 'tar' | 'binary'
 }
 
 /**
@@ -40,7 +41,9 @@ export interface ToolPin {
  * other dependency change) — never edited casually — because they are the trust
  * anchor for the downloaded tools.
  */
-export const PINNED_TOOLS: Record<'syft' | 'grype', ToolPin> = {
+export type PinnedTool = 'syft' | 'grype' | 'cosign'
+
+export const PINNED_TOOLS: Record<PinnedTool, ToolPin> = {
   syft: {
     version: '1.48.0',
     urlTemplate:
@@ -50,7 +53,8 @@ export const PINNED_TOOLS: Record<'syft' | 'grype', ToolPin> = {
         '6cef9a7f37220d9067eaf9cfaaa2fce986e9f320a8d42cbc36658c99af78ea04',
       'linux-arm64':
         '6865a3d97c4e28b4b38571c17a2bf512da4494ef1d37613c3122fce0d67e63b0'
-    }
+    },
+    format: 'tar'
   },
   grype: {
     version: '0.116.0',
@@ -61,7 +65,20 @@ export const PINNED_TOOLS: Record<'syft' | 'grype', ToolPin> = {
         '40aff724297312f91ea390d003bed8d8651c74cc7f5b26732db80b3a408d2fc5',
       'linux-arm64':
         '7af3eed24f469b0cf3ab5ec4508d9c12f4bb9c2c6be714f32973c7b5d63cb6a5'
-    }
+    },
+    format: 'tar'
+  },
+  cosign: {
+    version: '3.1.2',
+    urlTemplate:
+      'https://github.com/sigstore/cosign/releases/download/v{version}/cosign-linux-{arch}',
+    sha256: {
+      'linux-x64':
+        'f7622ed3cf22e55e1ae6377c080979ff77a22da9981c11df222a2e444991e7cf',
+      'linux-arm64':
+        '90e7ae0b5dfd60f20816b52c012addf7fc055ebcc7bea4ce81c428ca8518c302'
+    },
+    format: 'binary'
   }
 }
 
@@ -73,8 +90,8 @@ export const PINNED_TOOLS: Record<'syft' | 'grype', ToolPin> = {
  */
 export const APT_PACKAGES = ['qemu-utils', 'libguestfs-tools'] as const
 
-// Maps a platform key to the architecture token Anchore uses in release asset
-// names (`amd64`/`arm64`), substituted into `urlTemplate`.
+// Maps a platform key to the architecture token used in release asset names
+// (`amd64`/`arm64`), substituted into `urlTemplate`.
 const URL_ARCH: Record<PlatformKey, string> = {
   'linux-x64': 'amd64',
   'linux-arm64': 'arm64'
@@ -100,18 +117,21 @@ export function platformKey(): PlatformKey {
 }
 
 /**
- * Ensure a pinned standalone binary (`syft`/`grype`) is available, returning the
- * directory containing it. Checks the tool cache first; otherwise downloads the
- * templated release asset, recomputes its SHA-256, and compares to the pin —
- * aborting (never extracting, never caching) on any mismatch. A verified
- * download is extracted and cached for reuse.
+ * Ensure a pinned standalone binary (`syft`/`grype`/`cosign`) is available,
+ * returning the directory containing it. Checks the tool cache first; otherwise
+ * downloads the templated release asset, recomputes its SHA-256, and compares
+ * to the pin — aborting (never extracting, never caching) on any mismatch. A
+ * verified download is extracted or made executable and cached for reuse.
  */
-export async function ensureBinary(name: 'syft' | 'grype'): Promise<string> {
+export async function ensureBinary(name: PinnedTool): Promise<string> {
   const pin = PINNED_TOOLS[name]
   const key = platformKey()
 
   const cached = tc.find(name, pin.version, key)
   if (cached) {
+    if (pin.format === 'binary') {
+      await fs.promises.chmod(path.join(cached, name), 0o755)
+    }
     core.info(`Using cached ${name} ${pin.version} from ${cached}.`)
     return cached
   }
@@ -131,6 +151,19 @@ export async function ensureBinary(name: 'syft' | 'grype'): Promise<string> {
         `expected sha256 ${expected}, got ${actual}. ` +
         'Refusing to extract or cache the download.'
     )
+  }
+
+  if (pin.format === 'binary') {
+    await fs.promises.chmod(downloaded, 0o755)
+    const cachedDir = await tc.cacheFile(
+      downloaded,
+      name,
+      name,
+      pin.version,
+      key
+    )
+    await fs.promises.chmod(path.join(cachedDir, name), 0o755)
+    return cachedDir
   }
 
   const extracted = await tc.extractTar(downloaded)

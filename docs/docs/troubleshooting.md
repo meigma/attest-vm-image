@@ -136,10 +136,11 @@ is slow.
 ### Problem: tool or database downloads fail
 
 The action needs outbound access to download the pinned `syft` and `grype`
-binaries from `github.com` release assets and to fetch the Grype vulnerability
-database at scan time. Symptoms are an integrity or download error while
-fetching a binary, or a Grype scan error — see the vulnerability-scan and
-tool-acquisition entries in [Failure modes](reference.md#failure-modes).
+binaries, plus `cosign` when `signer: cosign-key` is selected, from `github.com`
+release assets and to fetch the Grype vulnerability database at scan time.
+Symptoms are an integrity or download error while fetching a binary, or a Grype
+scan error — see the vulnerability-scan and tool-acquisition entries in
+[Failure modes](reference.md#failure-modes).
 
 **Solution:** Allow egress to the endpoints listed under
 [Requirements](reference.md#requirements). On locked-down or air-gapped runners,
@@ -175,15 +176,15 @@ See [Publish signed attestations](signing.md).
 
 ### Problem: an unimplemented signer throws only on a passing image
 
-`sigstore-keyless`, `cosign-key`, and `kms` pass input validation but throw when
+`sigstore-keyless` and `kms` pass their initial input validation but throw when
 the signing step is reached. Signing runs only on a passing result, so the same
 workflow configuration fails differently depending on the image: on a failing
 image it fails with the ordinary evidence-complete-failure message (signing is
 skipped, so no signer-related error appears); on a passing image the signer is
 actually reached and throws the "not yet implemented" diagnostic instead.
 
-**Solution:** Use `signer: none` or `signer: github`. See the signer entry in
-[Failure modes](reference.md#failure-modes).
+**Solution:** Use `signer: none`, `signer: github`, or `signer: cosign-key`. See
+the signer entry in [Failure modes](reference.md#failure-modes).
 
 ### Problem: signing failed but the evidence looks complete
 

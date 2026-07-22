@@ -13,24 +13,26 @@ The action is referenced as `uses: meigma/attest-vm-image@v1`.
 Every input is a string. Only `disk-path` is required; each other input has a
 default or a built-in fallback.
 
-| Input                 | Required | Default               | Allowed values / format                                                                                                                |
-| --------------------- | -------- | --------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| `disk-path`           | Yes      | —                     | Filesystem path to the completed QCOW2 image.                                                                                          |
-| `metadata-path`       | No       | (unset)               | Filesystem path to an Incus metadata tarball. Validated per [Metadata archive rules](#metadata-archive-rules).                         |
-| `build-manifest-path` | No       | (unset)               | Filesystem path to a builder manifest file. Digested only; its contents are not parsed.                                                |
-| `output-directory`    | No       | `./evidence`          | Directory the evidence files are written into.                                                                                         |
-| `sbom-format`         | No       | `spdx-json`           | `spdx-json`, `cyclonedx-json`                                                                                                          |
-| `fail-on-severity`    | No       | `high`                | `critical`, `high`, `none`                                                                                                             |
-| `policy-path`         | No       | (unset)               | Filesystem path to a custom contamination policy JSON file. When unset, the [built-in policy](#built-in-contamination-policy) applies. |
-| `signer`              | No       | `none`                | `none`, `github`, `sigstore-keyless`, `cosign-key`, `kms`                                                                              |
-| `signing-key`         | No       | (unset)               | A key reference (never raw key bytes). Required only when `signer` is `cosign-key` or `kms`.                                           |
-| `github-token`        | No       | `${{ github.token }}` | GitHub token used by `signer: github` to push attestations; must carry `attestations: write`.                                          |
+| Input                 | Required | Default               | Allowed values / format                                                                                                                       |
+| --------------------- | -------- | --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `disk-path`           | Yes      | —                     | Filesystem path to the completed QCOW2 image.                                                                                                 |
+| `metadata-path`       | No       | (unset)               | Filesystem path to an Incus metadata tarball. Validated per [Metadata archive rules](#metadata-archive-rules).                                |
+| `build-manifest-path` | No       | (unset)               | Filesystem path to a builder manifest file. Digested only; its contents are not parsed.                                                       |
+| `output-directory`    | No       | `./evidence`          | Directory the evidence files are written into.                                                                                                |
+| `sbom-format`         | No       | `spdx-json`           | `spdx-json`, `cyclonedx-json`                                                                                                                 |
+| `fail-on-severity`    | No       | `high`                | `critical`, `high`, `none`                                                                                                                    |
+| `policy-path`         | No       | (unset)               | Filesystem path to a custom contamination policy JSON file. When unset, the [built-in policy](#built-in-contamination-policy) applies.        |
+| `signer`              | No       | `none`                | `none`, `github`, `sigstore-keyless`, `cosign-key`, `kms`                                                                                     |
+| `signing-key`         | No       | (unset)               | For `cosign-key`, a readable encrypted key file or `env://NAME`; always a reference, never raw key bytes. Required by `cosign-key` and `kms`. |
+| `github-token`        | No       | `${{ github.token }}` | GitHub token used by `signer: github` to push attestations; must carry `attestations: write`.                                                 |
 
 Notes:
 
-- `signer`: only `none` and `github` are implemented. `sigstore-keyless`,
-  `cosign-key`, and `kms` pass input validation but fail closed when the signing
-  step is reached (see [Failure modes](#failure-modes)).
+- `signer`: `none`, `github`, and `cosign-key` are implemented.
+  `sigstore-keyless` and `kms` fail closed by name when signing is reached.
+- `cosign-key` also requires a non-empty `COSIGN_PASSWORD` environment variable.
+  An `env://NAME` reference must name a non-empty environment variable. Both
+  resolved secret values are masked before any tools run.
 - `github-token` is never read from an ambient `GITHUB_TOKEN` environment
   variable; it comes only from this input (whose default is
   `${{ github.token }}`).
@@ -40,14 +42,20 @@ Notes:
 Inputs are validated up front, before any tool runs. The first invalid input
 fails closed with a distinct message:
 
-| Condition                                               | Message                                                                                 |
-| ------------------------------------------------------- | --------------------------------------------------------------------------------------- |
-| `disk-path` empty or unset                              | `disk-path is required but was not provided.`                                           |
-| `sbom-format` not in the allowed set                    | `sbom-format must be one of spdx-json, cyclonedx-json; got "<value>".`                  |
-| `fail-on-severity` not in the allowed set               | `fail-on-severity must be one of critical, high, none; got "<value>".`                  |
-| `signer` not in the allowed set                         | `signer must be one of none, github, sigstore-keyless, cosign-key, kms; got "<value>".` |
-| `signer` is `cosign-key` or `kms` with no `signing-key` | `signer "<signer>" requires a signing-key reference, but none was provided.`            |
-| `policy-path` set but missing or unreadable             | `policy-path "<path>" does not exist or is not readable.`                               |
+| Condition                                               | Message                                                                                        |
+| ------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `disk-path` empty or unset                              | `disk-path is required but was not provided.`                                                  |
+| `sbom-format` not in the allowed set                    | `sbom-format must be one of spdx-json, cyclonedx-json; got "<value>".`                         |
+| `fail-on-severity` not in the allowed set               | `fail-on-severity must be one of critical, high, none; got "<value>".`                         |
+| `signer` not in the allowed set                         | `signer must be one of none, github, sigstore-keyless, cosign-key, kms; got "<value>".`        |
+| `signer` is `cosign-key` or `kms` with no `signing-key` | `signer "<signer>" requires a signing-key reference, but none was provided.`                   |
+| `signing-key` supplied to a signer that does not use it | `signer "<signer>" does not accept signing-key; remove the contradictory input.`               |
+| `signing-key` appears to contain private-key bytes      | `signing-key must be a key reference, never raw private-key bytes.`                            |
+| `cosign-key` reference is not a file or `env://NAME`    | `signer "cosign-key" requires signing-key to be a readable encrypted key file or env://NAME.`  |
+| `cosign-key` file is missing or unreadable              | `signer "cosign-key" signing-key file does not exist or is not readable.`                      |
+| `cosign-key` environment variable is empty              | `signing-key references environment variable <NAME>, but it is unset or empty.`                |
+| `COSIGN_PASSWORD` is empty                              | `signer "cosign-key" requires the COSIGN_PASSWORD environment variable for the encrypted key.` |
+| `policy-path` set but missing or unreadable             | `policy-path "<path>" does not exist or is not readable.`                                      |
 
 Custom `policy-path` files are additionally parsed and structurally validated at
 this point; those messages are cataloged under [Failure modes](#failure-modes).
@@ -95,10 +103,11 @@ Notes:
 Required job permissions by signer. The action cannot grant these; the calling
 job must declare them.
 
-| `signer` | `contents` | `id-token` | `attestations` |
-| -------- | ---------- | ---------- | -------------- |
-| `none`   | `read`     | —          | —              |
-| `github` | `read`     | `write`    | `write`        |
+| `signer`     | `contents` | `id-token` | `attestations` |
+| ------------ | ---------- | ---------- | -------------- |
+| `none`       | `read`     | —          | —              |
+| `github`     | `read`     | `write`    | `write`        |
+| `cosign-key` | `read`     | —          | —              |
 
 Notes:
 
@@ -112,6 +121,8 @@ Notes:
   [how-it-works.md](how-it-works.md)).
 - Fork pull requests receive a read-only token and no OIDC token, so
   `signer: github` cannot run on a fork pull request.
+- `signer: cosign-key` needs no OIDC or attestation API permission. The caller
+  supplies an encrypted private key and password through runner-local state.
 
 ## Requirements
 
@@ -135,8 +146,9 @@ Notes:
   `apt-get install` and `chmod` itself. The action's own install runs only when
   the action runs, which is too late for a preceding step.
 - **Network egress:** the action requires outbound access to:
-  - `github.com` release assets — to download the pinned `syft` and `grype`
-    binaries (see [Tool versions](#tool-versions)).
+  - `github.com` release assets — to download the pinned `syft`, `grype`, and,
+    only for `signer: cosign-key`, `cosign` binaries (see
+    [Tool versions](#tool-versions)).
   - the Grype vulnerability database — downloaded at scan time.
   - the GitHub attestation API — only for `signer: github`.
 - **`GRYPE_DB_CACHE_DIR`:** Grype honors this environment variable to pre-seed
@@ -158,9 +170,9 @@ are fixed except the SBOM, whose name depends on `sbom-format`.
 | `validation-report.json`                | Evidence stage reached            | Flattened predicate plus `incusMetadata.properties`.      |
 | `validation-predicate.json`             | Evidence stage reached            | The in-toto statement (subject + predicate).              |
 | `evidence-manifest.json`                | Complete pass or validation fail  | Versioned handoff describing inputs and evidence.         |
-| `attestations/provenance.sigstore.json` | `signer` not `none` **and** pass  | Build-provenance Sigstore bundle.                         |
-| `attestations/sbom.sigstore.json`       | `signer` not `none` **and** pass  | SBOM attestation Sigstore bundle.                         |
-| `attestations/validation.sigstore.json` | `signer` not `none` **and** pass  | Validation attestation Sigstore bundle.                   |
+| `attestations/provenance.sigstore.json` | Implemented signer **and** pass   | Build-provenance Sigstore bundle.                         |
+| `attestations/sbom.sigstore.json`       | Implemented signer **and** pass   | SBOM attestation Sigstore bundle.                         |
+| `attestations/validation.sigstore.json` | Implemented signer **and** pass   | Validation attestation Sigstore bundle.                   |
 
 Exactly one SBOM file is written per run. A completed unsigned run writes six
 files: `checksums.txt`, one SBOM, the vulnerability report, the two validation
@@ -292,7 +304,11 @@ Notes:
   selected with `--predicate-type`.
 - The metadata tarball is a subject of the provenance attestation only, never of
   the SBOM or validation attestations.
-- `attestation-url` points at the validation attestation.
+- `attestation-url` points at the validation attestation for `signer: github`;
+  it is unset for local `cosign-key` bundles.
+- `cosign-key` bundles use the Sigstore bundle v0.3 media type, contain no
+  transparency-log entries, and are promoted only after all three signatures,
+  subjects, and predicate types self-verify.
 - The validation predicate type is an opaque, versioned identifier and is not a
   live endpoint. Field-by-field definitions:
   [predicate/vm-image-validation-v1.md](predicate/vm-image-validation-v1.md).
@@ -454,18 +470,19 @@ informational; its length and order are not guaranteed stable across patch
 releases. As produced, the order is `syft`, `grype`, the `apt`-installed
 packages, then the action itself.
 
-| Tool               | Version               | Source                                | Integrity                                                           |
-| ------------------ | --------------------- | ------------------------------------- | ------------------------------------------------------------------- |
-| `syft`             | `1.48.0`              | GitHub Release binary (anchore/syft)  | Pinned per-platform SHA-256, verified before extraction or caching. |
-| `grype`            | `0.116.0`             | GitHub Release binary (anchore/grype) | Pinned per-platform SHA-256, verified before extraction or caching. |
-| `qemu-utils`       | Ubuntu archive build  | `sudo apt-get install`                | Unpinned; the installed version is recorded via `dpkg-query`.       |
-| `libguestfs-tools` | Ubuntu archive build  | `sudo apt-get install`                | Unpinned; the installed version is recorded via `dpkg-query`.       |
-| `attest-vm-image`  | This action's version | `package.json`                        | Appended last.                                                      |
+| Tool               | Version               | Source                                  | Integrity                                                                                              |
+| ------------------ | --------------------- | --------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `syft`             | `1.48.0`              | GitHub Release binary (anchore/syft)    | Pinned per-platform SHA-256, verified before extraction or caching.                                    |
+| `grype`            | `0.116.0`             | GitHub Release binary (anchore/grype)   | Pinned per-platform SHA-256, verified before extraction or caching.                                    |
+| `cosign`           | `3.1.2`               | GitHub Release binary (sigstore/cosign) | Pinned per-platform SHA-256, verified before executable caching; downloaded only for external signing. |
+| `qemu-utils`       | Ubuntu archive build  | `sudo apt-get install`                  | Unpinned; the installed version is recorded via `dpkg-query`.                                          |
+| `libguestfs-tools` | Ubuntu archive build  | `sudo apt-get install`                  | Unpinned; the installed version is recorded via `dpkg-query`.                                          |
+| `attest-vm-image`  | This action's version | `package.json`                          | Appended last.                                                                                         |
 
 Notes:
 
-- `syft` and `grype` are byte-pinned: a download whose SHA-256 does not match
-  the pin aborts before extraction or caching (see
+- `syft`, `grype`, and `cosign` are byte-pinned: a download whose SHA-256 does
+  not match the pin aborts before extraction or caching (see
   [Failure modes](#failure-modes)).
 - `qemu-utils` and `libguestfs-tools` carry no version pin; the action installs
   whatever the runner's Ubuntu archive provides and records the `dpkg` package
@@ -508,7 +525,21 @@ Placeholders written as `<...>` are interpolated at runtime.
   — invalid `signer`. Use one of the listed values.
 - `signer "<signer>" requires a signing-key reference, but none was provided.` —
   `cosign-key` or `kms` was selected without `signing-key`. Provide a
-  `signing-key` reference, or select a supported signer (`none`/`github`).
+  `signing-key` reference, or select a signer that does not need one.
+- `signer "<signer>" does not accept signing-key; remove the contradictory input.`
+  — a key reference was supplied to `none`, `github`, or `sigstore-keyless`.
+- `signing-key must be a key reference, never raw private-key bytes.` — the
+  input contained a PEM header or newline. Move the encrypted key into a file or
+  environment secret and pass only its reference.
+- `signer "cosign-key" requires signing-key to be a readable encrypted key file or env://NAME.`
+  — the reference used an unsupported URI or malformed environment name.
+- `signer "cosign-key" signing-key file does not exist or is not readable.` —
+  materialize a readable encrypted key file before the action or use
+  `env://NAME`.
+- `signing-key references environment variable <NAME>, but it is unset or empty.`
+  — set the named secret environment variable on the action step.
+- `signer "cosign-key" requires the COSIGN_PASSWORD environment variable for the encrypted key.`
+  — set the key's password as a secret environment variable on the action step.
 - `policy-path "<path>" does not exist or is not readable.` — the `policy-path`
   file is missing or unreadable. Point it at a readable file.
 
@@ -614,8 +645,9 @@ Tool acquisition runs before the disk is validated, so these can precede a
 disk-path error.
 
 - `Integrity check failed for <name> <version> (<platform>): expected sha256 <expected>, got <actual>. Refusing to extract or cache the download.`
-  — a downloaded `syft`/`grype` binary did not match its pinned digest. Retry
-  (the download may be corrupt); a persistent mismatch is a supply-chain signal.
+  — a downloaded `syft`, `grype`, or `cosign` binary did not match its pinned
+  digest. Retry (the download may be corrupt); a persistent mismatch is a
+  supply-chain signal.
 - `No readable kernel image at /boot/vmlinuz-* after chmod. The libguestfs direct backend supermin appliance must read the host kernel image as the non-root runner user; without it guestmount fails.`
   — no readable host kernel remained. Use a runner whose `/boot/vmlinuz-*` can
   be made world-readable (see [Requirements](#requirements)).
@@ -633,7 +665,8 @@ disk-path error.
 
 ### Signing
 
-Signing runs only for `signer: github` on a passing result.
+Signing runs only on a passing result. `github` publishes remotely; `cosign-key`
+creates local, offline bundles.
 
 - `signer: github requires a GitHub token to push attestations to the GitHub attestation API. Provide the github-token input (it defaults to the job's ${{ github.token }} and must carry attestations: write), but it resolved empty.`
   — `github-token` resolved empty. Do not override it with an empty value; the
@@ -649,10 +682,22 @@ Signing runs only for `signer: github` on a passing result.
   indicates the **same** plan/visibility restriction as the translated
   diagnostic. Remedy: identical — use a public repository or GitHub Enterprise
   Cloud.
-- `signer "<signer>" is not yet implemented. v1 supports only "none" and "github"; the external backends (sigstore-keyless, cosign-key, kms) are a post-v1 extension point, and this action never falls back to a different backend.`
-  — `sigstore-keyless`, `cosign-key`, or `kms` was selected and reached (this
-  throws only on a passing result; a failing result skips signing). Remedy: use
-  `none` or `github`.
+- `attestation bundle directory "<path>" already exists; refusing to overwrite it.`
+  — remove or choose a fresh `output-directory`; the signer never overwrites an
+  earlier bundle set.
+- `Cosign produced an unexpected bundle media type.` /
+  `Cosign bundle has invalid transparency-log metadata.` /
+  `Cosign unexpectedly published transparency-log material for signer "cosign-key".`
+  — Cosign's output violated the offline bundle contract. Nothing is promoted;
+  retain logs and investigate the binary/configuration before retrying.
+- `Cosign bundle is missing its DSSE payload.` /
+  `Cosign bundle payload does not match the intended statement.` — the bundle
+  was incomplete or did not carry the exact statement supplied by the action.
+  Nothing is promoted.
+- `signer "<signer>" is not yet implemented. This release supports "none", "github", and "cosign-key"; the remaining external backends (sigstore-keyless and kms) are later extension points, and this action never falls back to a different backend.`
+  — `sigstore-keyless` or `kms` was selected and reached (this throws only on a
+  passing result; a failing result skips signing). Remedy: use `none`, `github`,
+  or `cosign-key`.
 
 ### Evidence-complete failure
 

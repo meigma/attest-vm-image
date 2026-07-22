@@ -222,6 +222,89 @@ jobs:
           echo "checksums.txt still verifies"
           sha256sum -c "$dir/checksums.txt"
 
+      # ---- Encrypted-key signing: local bundles, no public services ---------
+      - name: Install Cosign for integration key generation and verification
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        with:
+          cosign-release: v3.1.2
+
+      - name: Generate a throwaway encrypted Cosign key
+        run: |
+          set -euo pipefail
+          password="$(openssl rand -hex 32)"
+          echo "::add-mask::$password"
+          echo "COSIGN_PASSWORD=$password" >> "$GITHUB_ENV"
+          COSIGN_PASSWORD="$password" cosign generate-key-pair \
+            --output-key-prefix integration
+
+      - name: Run action (encrypted Cosign key, offline signing)
+        id: cosign_key
+        uses: ./
+        with:
+          disk-path: disk.qcow2
+          output-directory: ./evidence-cosign-key
+          fail-on-severity: none
+          signer: cosign-key
+          signing-key: integration.key
+
+      - name: Verify encrypted-key bundles and negative cases
+        run: |
+          set -euo pipefail
+          dir=evidence-cosign-key/attestations
+          hex="$(sha256sum disk.qcow2 | awk '{print $1}')"
+
+          test '${{ steps.cosign_key.outputs.attestation-bundle-path }}' = "$dir"
+          test -z '${{ steps.cosign_key.outputs.attestation-url }}'
+          jq -e 'has("attestationUrl") | not' \
+            evidence-cosign-key/evidence-manifest.json >/dev/null
+
+          for f in provenance sbom validation; do
+            test -f "$dir/$f.sigstore.json"
+            jq -e '.mediaType == "application/vnd.dev.sigstore.bundle.v0.3+json"' \
+              "$dir/$f.sigstore.json" >/dev/null
+            jq -e '.verificationMaterial.tlogEntries | length == 0' \
+              "$dir/$f.sigstore.json" >/dev/null
+          done
+
+          cosign verify-blob-attestation \
+            --bundle "$dir/provenance.sigstore.json" \
+            --key integration.pub --insecure-ignore-tlog \
+            --digest "$hex" --digestAlg sha256 \
+            --type https://slsa.dev/provenance/v1
+          cosign verify-blob-attestation \
+            --bundle "$dir/sbom.sigstore.json" \
+            --key integration.pub --insecure-ignore-tlog \
+            --digest "$hex" --digestAlg sha256 \
+            --type https://spdx.dev/Document/v2.3
+          cosign verify-blob-attestation \
+            --bundle "$dir/validation.sigstore.json" \
+            --key integration.pub --insecure-ignore-tlog \
+            --digest "$hex" --digestAlg sha256 \
+            --type https://meigma.github.io/attest-vm-image/predicate/vm-image-validation/v1
+
+          cp disk.qcow2 changed.qcow2
+          printf x >> changed.qcow2
+          changed_hex="$(sha256sum changed.qcow2 | awk '{print $1}')"
+          if cosign verify-blob-attestation \
+            --bundle "$dir/validation.sigstore.json" \
+            --key integration.pub --insecure-ignore-tlog \
+            --digest "$changed_hex" --digestAlg sha256 \
+            --type https://meigma.github.io/attest-vm-image/predicate/vm-image-validation/v1; then
+            echo "changed disk digest unexpectedly verified" >&2
+            exit 1
+          fi
+
+          jq '.dsseEnvelope.signatures[0].sig = "AAAA"' \
+            "$dir/validation.sigstore.json" > tampered.sigstore.json
+          if cosign verify-blob-attestation \
+            --bundle tampered.sigstore.json \
+            --key integration.pub --insecure-ignore-tlog \
+            --digest "$hex" --digestAlg sha256 \
+            --type https://meigma.github.io/attest-vm-image/predicate/vm-image-validation/v1; then
+            echo "tampered bundle unexpectedly verified" >&2
+            exit 1
+          fi
+
   # Opt-in signing integration: exercises signer: github end to end and verifies
   # the published attestations with the GitHub CLI. Attestations can only be
   # issued where the repository plan allows it. This repository is PUBLIC, so the

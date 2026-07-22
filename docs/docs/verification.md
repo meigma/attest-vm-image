@@ -20,6 +20,8 @@ the operator task in [signing.md](signing.md).
 - The GitHub CLI (`gh`) with `gh attestation` support, authenticated with
   `gh auth login` or a `GH_TOKEN`. Commands here were tested with `gh` 2.94.0.
 - `jq` if you want to extract predicate JSON for a downstream policy engine.
+- For `cosign-key` bundles, Cosign `v3.1.2` and the signer's public key obtained
+  through an independently trusted channel.
 
 Throughout, `<owner>/<repo>` is the repository that **ran** `attest-vm-image`
 and published the attestations — the image builder's repository, not
@@ -50,6 +52,43 @@ they carry their own Sigstore verification material (see
 
 If the run was unsigned (`signer: none`), stop here — there are no attestations
 to verify.
+
+## Verify `cosign-key` bundles
+
+Use this when the producer selected `signer: cosign-key`. These bundles are not
+published and deliberately contain no public transparency-log entry. Verify them
+against the independently trusted `cosign.pub` supplied by the signer.
+
+```bash
+hex="$(sha256sum disk.qcow2 | awk '{print $1}')"
+
+cosign verify-blob-attestation \
+  --bundle evidence/attestations/provenance.sigstore.json \
+  --key cosign.pub --insecure-ignore-tlog \
+  --digest "$hex" --digestAlg sha256 \
+  --type https://slsa.dev/provenance/v1
+
+cosign verify-blob-attestation \
+  --bundle evidence/attestations/sbom.sigstore.json \
+  --key cosign.pub --insecure-ignore-tlog \
+  --digest "$hex" --digestAlg sha256 \
+  --type https://spdx.dev/Document/v2.3
+
+cosign verify-blob-attestation \
+  --bundle evidence/attestations/validation.sigstore.json \
+  --key cosign.pub --insecure-ignore-tlog \
+  --digest "$hex" --digestAlg sha256 \
+  --type https://meigma.github.io/attest-vm-image/predicate/vm-image-validation/v1
+```
+
+For CycloneDX, replace the SBOM type with `https://cyclonedx.org/bom`. For SPDX,
+use the version recorded in the bundle if it differs from `v2.3`.
+
+All three commands must exit `0`. `--insecure-ignore-tlog` disables only the
+transparency witness that this backend intentionally omits; Cosign still checks
+the signature against `cosign.pub`, the predicate type, and the disk digest in
+the statement subject. Treat a changed image, changed bundle, unexpected type,
+or different public key as a verification failure.
 
 ## Verify a published attestation online
 

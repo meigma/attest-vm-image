@@ -274,8 +274,8 @@ individual file paths and disk digest in its step
 
 ## Next steps
 
-- [Publish signed attestations](signing.md) — switch to `signer: github` and
-  publish the evidence as verifiable GitHub attestations.
+- [Sign attestations](signing.md) — publish through GitHub or create portable,
+  offline bundles with an encrypted Cosign key.
 - [Control what fails validation](validation-policy.md) — make the run actually
   fail on real vulnerabilities and on contamination you care about.
 - [Verify evidence and attestations](verification.md) — verify what a producer

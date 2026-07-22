@@ -17,12 +17,14 @@ const tc = {
   find: jest.fn<typeof tcModule.find>(),
   downloadTool: jest.fn<typeof tcModule.downloadTool>(),
   extractTar: jest.fn<typeof tcModule.extractTar>(),
-  cacheDir: jest.fn<typeof tcModule.cacheDir>()
+  cacheDir: jest.fn<typeof tcModule.cacheDir>(),
+  cacheFile: jest.fn<typeof tcModule.cacheFile>()
 }
 const sha256File = jest.fn<(path: string) => Promise<string>>()
 const sha256Buffer = jest.fn<(buf: Buffer) => string>()
 const readdirSync = jest.fn<(p: string) => string[]>()
 const accessSync = jest.fn<(p: string, mode?: number) => void>()
+const chmod = jest.fn<(p: string, mode: number) => Promise<void>>()
 
 jest.unstable_mockModule('@actions/core', () => core)
 jest.unstable_mockModule('@actions/tool-cache', () => tc)
@@ -31,6 +33,7 @@ jest.unstable_mockModule('../src/hash.js', () => ({ sha256File, sha256Buffer }))
 jest.unstable_mockModule('node:fs', () => ({
   readdirSync,
   accessSync,
+  promises: { chmod },
   constants: { R_OK: 4 }
 }))
 
@@ -126,6 +129,34 @@ describe('tools.ts', () => {
       expect(tc.downloadTool).toHaveBeenCalledWith(
         'https://github.com/anchore/grype/releases/download/v0.116.0/grype_0.116.0_linux_arm64.tar.gz'
       )
+    })
+
+    it('downloads, verifies, makes executable, and caches the pinned Cosign binary', async () => {
+      tc.find.mockReturnValue('')
+      tc.downloadTool.mockResolvedValue('/dl/cosign')
+      sha256File.mockResolvedValue(PINNED_TOOLS.cosign.sha256['linux-x64'])
+      tc.cacheFile.mockResolvedValue('/cache/cosign/3.1.2/linux-x64')
+      chmod.mockResolvedValue()
+
+      const dir = await ensureBinary('cosign')
+
+      expect(tc.downloadTool).toHaveBeenCalledWith(
+        'https://github.com/sigstore/cosign/releases/download/v3.1.2/cosign-linux-amd64'
+      )
+      expect(tc.extractTar).not.toHaveBeenCalled()
+      expect(chmod).toHaveBeenCalledWith('/dl/cosign', 0o755)
+      expect(tc.cacheFile).toHaveBeenCalledWith(
+        '/dl/cosign',
+        'cosign',
+        'cosign',
+        '3.1.2',
+        'linux-x64'
+      )
+      expect(chmod).toHaveBeenCalledWith(
+        '/cache/cosign/3.1.2/linux-x64/cosign',
+        0o755
+      )
+      expect(dir).toBe('/cache/cosign/3.1.2/linux-x64')
     })
 
     it('throws before extracting or caching when the digest differs by one byte', async () => {

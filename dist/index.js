@@ -30252,6 +30252,7 @@ const FAIL_ON_SEVERITIES = [
 // Backends that require a `signing-key` reference. `github` and
 // `sigstore-keyless` derive their identity from workflow OIDC and need none.
 const KEY_REFERENCE_BACKENDS = ['cosign-key', 'kms'];
+const ENV_KEY_REFERENCE = /^env:\/\/([A-Za-z_][A-Za-z0-9_]*)$/;
 /**
  * Read `@actions/core` inputs, apply defaults, and validate them into a typed
  * `Inputs` object. Throws an `Error` with a specific, distinct message on the
@@ -30279,6 +30280,42 @@ function parseInputs() {
     const signingKey = getInput('signing-key') || undefined;
     if (KEY_REFERENCE_BACKENDS.includes(signer) && !signingKey) {
         throw new Error(`signer "${signer}" requires a signing-key reference, but none was provided.`);
+    }
+    if (signingKey && !KEY_REFERENCE_BACKENDS.includes(signer)) {
+        throw new Error(`signer "${signer}" does not accept signing-key; remove the contradictory input.`);
+    }
+    if (signingKey &&
+        /[\r\n]|-----BEGIN [^-]*PRIVATE KEY-----/.test(signingKey)) {
+        throw new Error('signing-key must be a key reference, never raw private-key bytes.');
+    }
+    if (signer === 'cosign-key' && signingKey) {
+        const envMatch = ENV_KEY_REFERENCE.exec(signingKey);
+        if (signingKey.startsWith('env://')) {
+            if (!envMatch) {
+                throw new Error('signer "cosign-key" requires signing-key to be a readable encrypted key file or env://NAME.');
+            }
+            const secret = process.env[envMatch[1]];
+            if (!secret) {
+                throw new Error(`signing-key references environment variable ${envMatch[1]}, but it is unset or empty.`);
+            }
+            setSecret(secret);
+        }
+        else {
+            if (signingKey.includes('://')) {
+                throw new Error('signer "cosign-key" requires signing-key to be a readable encrypted key file or env://NAME.');
+            }
+            try {
+                fs$1.accessSync(signingKey, fs$1.constants.R_OK);
+            }
+            catch {
+                throw new Error('signer "cosign-key" signing-key file does not exist or is not readable.');
+            }
+        }
+        const password = process.env.COSIGN_PASSWORD;
+        if (!password) {
+            throw new Error('signer "cosign-key" requires the COSIGN_PASSWORD environment variable for the encrypted key.');
+        }
+        setSecret(password);
     }
     const policyPath = getInput('policy-path') || undefined;
     if (policyPath) {
@@ -33789,6 +33826,37 @@ function cacheDir$1(sourceDir, tool, version, arch) {
     });
 }
 /**
+ * Caches a downloaded file (GUID) and installs it
+ * into the tool cache with a given targetName
+ *
+ * @param sourceFile    the file to cache into tools.  Typically a result of downloadTool which is a guid.
+ * @param targetFile    the name of the file name in the tools directory
+ * @param tool          tool name
+ * @param version       version of the tool.  semver format
+ * @param arch          architecture of the tool.  Optional.  Defaults to machine architecture
+ */
+function cacheFile(sourceFile, targetFile, tool, version, arch) {
+    return __awaiter$6(this, void 0, void 0, function* () {
+        version = semverExports.clean(version) || version;
+        arch = arch || os.arch();
+        debug$4(`Caching tool ${tool} ${version} ${arch}`);
+        debug$4(`source file: ${sourceFile}`);
+        if (!fs.statSync(sourceFile).isFile()) {
+            throw new Error('sourceFile is not a file');
+        }
+        // create the tool dir
+        const destFolder = yield _createToolPath(tool, version, arch);
+        // copy instead of move. move can fail on Windows due to
+        // anti-virus software having an open handle on a file.
+        const destPath = path$1.join(destFolder, targetFile);
+        debug$4(`destination file ${destPath}`);
+        yield cp(sourceFile, destPath);
+        // write .complete
+        _completeToolPath(tool, version, arch);
+        return destFolder;
+    });
+}
+/**
  * Finds the path to a tool version in the local installed tool cache
  *
  * @param toolName      name of the tool
@@ -33947,12 +34015,14 @@ function _getGlobal(key, defaultValue) {
 /**
  * Run a command through `@actions/exec`, capturing stdout, stderr, and the exit
  * code. Every invocation is wrapped in a `core.startGroup`/`endGroup` labelled
- * with the full command line so each tool call is a foldable section in the
- * workflow log. By default a non-zero exit throws; pass
+ * with a caller-controlled label so each tool call is a foldable section in
+ * the workflow log. By default the full command line is used; secret-bearing
+ * callers must provide `displayLabel`. By default a non-zero exit throws; pass
  * `opts.ignoreReturnCode` to receive the result instead.
  */
 async function exec(cmd, args = [], opts = {}) {
-    const label = [cmd, ...args].join(' ');
+    const commandLine = [cmd, ...args].join(' ');
+    const label = opts.displayLabel ?? commandLine;
     startGroup(label);
     try {
         const result = await getExecOutput(cmd, args, {
@@ -33965,7 +34035,7 @@ async function exec(cmd, args = [], opts = {}) {
             ignoreReturnCode: true
         });
         if (!opts.ignoreReturnCode && result.exitCode !== 0) {
-            const detail = result.stderr.trim();
+            const detail = opts.redactStderr ? '' : result.stderr.trim();
             throw new Error(`Command failed with exit code ${result.exitCode}: ${label}` +
                 (detail ? `\n${detail}` : ''));
         }
@@ -33990,13 +34060,6 @@ async function exec(cmd, args = [], opts = {}) {
 // is checked out at runtime, so `../package.json` resolves for both the bundled
 // action and the test/src layout.
 const packageJson = createRequire(import.meta.url)('../package.json');
-/**
- * Pinned standalone binaries downloaded from GitHub Releases and integrity-
- * verified against these digests. These literals are the sole source of truth,
- * read only by this module. Pins are bumped by a reviewed PR (labeled like any
- * other dependency change) — never edited casually — because they are the trust
- * anchor for the downloaded tools.
- */
 const PINNED_TOOLS = {
     syft: {
         version: '1.48.0',
@@ -34004,7 +34067,8 @@ const PINNED_TOOLS = {
         sha256: {
             'linux-x64': '6cef9a7f37220d9067eaf9cfaaa2fce986e9f320a8d42cbc36658c99af78ea04',
             'linux-arm64': '6865a3d97c4e28b4b38571c17a2bf512da4494ef1d37613c3122fce0d67e63b0'
-        }
+        },
+        format: 'tar'
     },
     grype: {
         version: '0.116.0',
@@ -34012,7 +34076,17 @@ const PINNED_TOOLS = {
         sha256: {
             'linux-x64': '40aff724297312f91ea390d003bed8d8651c74cc7f5b26732db80b3a408d2fc5',
             'linux-arm64': '7af3eed24f469b0cf3ab5ec4508d9c12f4bb9c2c6be714f32973c7b5d63cb6a5'
-        }
+        },
+        format: 'tar'
+    },
+    cosign: {
+        version: '3.1.2',
+        urlTemplate: 'https://github.com/sigstore/cosign/releases/download/v{version}/cosign-linux-{arch}',
+        sha256: {
+            'linux-x64': 'f7622ed3cf22e55e1ae6377c080979ff77a22da9981c11df222a2e444991e7cf',
+            'linux-arm64': '90e7ae0b5dfd60f20816b52c012addf7fc055ebcc7bea4ce81c428ca8518c302'
+        },
+        format: 'binary'
     }
 };
 /**
@@ -34022,8 +34096,8 @@ const PINNED_TOOLS = {
  * (via `dpkg-query`) after the fact.
  */
 const APT_PACKAGES = ['qemu-utils', 'libguestfs-tools'];
-// Maps a platform key to the architecture token Anchore uses in release asset
-// names (`amd64`/`arm64`), substituted into `urlTemplate`.
+// Maps a platform key to the architecture token used in release asset names
+// (`amd64`/`arm64`), substituted into `urlTemplate`.
 const URL_ARCH = {
     'linux-x64': 'amd64',
     'linux-arm64': 'arm64'
@@ -34045,17 +34119,20 @@ function platformKey() {
     throw new Error(`attest-vm-image supports only x64 and arm64 Linux runners; detected architecture "${arch}".`);
 }
 /**
- * Ensure a pinned standalone binary (`syft`/`grype`) is available, returning the
- * directory containing it. Checks the tool cache first; otherwise downloads the
- * templated release asset, recomputes its SHA-256, and compares to the pin —
- * aborting (never extracting, never caching) on any mismatch. A verified
- * download is extracted and cached for reuse.
+ * Ensure a pinned standalone binary (`syft`/`grype`/`cosign`) is available,
+ * returning the directory containing it. Checks the tool cache first; otherwise
+ * downloads the templated release asset, recomputes its SHA-256, and compares
+ * to the pin — aborting (never extracting, never caching) on any mismatch. A
+ * verified download is extracted or made executable and cached for reuse.
  */
 async function ensureBinary(name) {
     const pin = PINNED_TOOLS[name];
     const key = platformKey();
     const cached = find(name, pin.version, key);
     if (cached) {
+        if (pin.format === 'binary') {
+            await fs$1.promises.chmod(path$2.join(cached, name), 0o755);
+        }
         info(`Using cached ${name} ${pin.version} from ${cached}.`);
         return cached;
     }
@@ -34070,6 +34147,12 @@ async function ensureBinary(name) {
         throw new Error(`Integrity check failed for ${name} ${pin.version} (${key}): ` +
             `expected sha256 ${expected}, got ${actual}. ` +
             'Refusing to extract or cache the download.');
+    }
+    if (pin.format === 'binary') {
+        await fs$1.promises.chmod(downloaded, 0o755);
+        const cachedDir = await cacheFile(downloaded, name, name, pin.version, key);
+        await fs$1.promises.chmod(path$2.join(cachedDir, name), 0o755);
+        return cachedDir;
     }
     const extracted = await extractTar(downloaded);
     return cacheDir$1(extracted, name, pin.version, key);
@@ -83064,13 +83147,116 @@ function attestProvenance(options) {
     });
 }
 
-/** Subdirectory (under `output-directory`) that holds the signed bundles. */
+const SLSA_PROVENANCE_TYPE = 'https://slsa.dev/provenance/v1';
 const BUNDLE_DIR = 'attestations';
+const REQUIRED_PROVENANCE_ENV = [
+    'GITHUB_SERVER_URL',
+    'GITHUB_REPOSITORY',
+    'GITHUB_REF',
+    'GITHUB_SHA',
+    'GITHUB_RUN_ID',
+    'GITHUB_RUN_ATTEMPT',
+    'GITHUB_EVENT_NAME',
+    'GITHUB_REPOSITORY_ID',
+    'GITHUB_REPOSITORY_OWNER_ID',
+    'GITHUB_WORKFLOW_REF',
+    'RUNNER_ENVIRONMENT'
+];
+async function buildExternalStatements(ctx, env = process.env) {
+    const diskSubject = subject(ctx.disk.path, ctx.disk.sha256);
+    const provenanceSubjects = [diskSubject];
+    if (ctx.metadata) {
+        provenanceSubjects.push(subject(ctx.metadata.path, ctx.metadata.sha256));
+    }
+    const sbomPredicate = JSON.parse(await fs$1.promises.readFile(ctx.sbom.path, 'utf8'));
+    const sbomType = sbomPredicateType(ctx.sbom.format, sbomPredicate);
+    return [
+        {
+            role: 'provenance-attestation',
+            filename: 'provenance.sigstore.json',
+            predicateType: SLSA_PROVENANCE_TYPE,
+            statement: statement(provenanceSubjects, SLSA_PROVENANCE_TYPE, buildGitHubActionsProvenance(env))
+        },
+        {
+            role: 'sbom-attestation',
+            filename: 'sbom.sigstore.json',
+            predicateType: sbomType,
+            statement: statement([diskSubject], sbomType, sbomPredicate)
+        },
+        {
+            role: 'validation-attestation',
+            filename: 'validation.sigstore.json',
+            predicateType: PREDICATE_TYPE,
+            statement: ctx.statement
+        }
+    ];
+}
+function sbomPredicateType(format, doc) {
+    if (format === 'cyclonedx-json')
+        return 'https://cyclonedx.org/bom';
+    const raw = doc.spdxVersion;
+    const match = typeof raw === 'string' ? /^SPDX-(\d+\.\d+)$/.exec(raw) : null;
+    return `https://spdx.dev/Document/v${match ? match[1] : '2.3'}`;
+}
+function buildGitHubActionsProvenance(env = process.env) {
+    const missing = REQUIRED_PROVENANCE_ENV.filter((name) => !env[name]);
+    if (missing.length > 0) {
+        throw new Error(`external signing requires GitHub Actions provenance environment variables: missing ${missing.join(', ')}.`);
+    }
+    const value = (name) => env[name];
+    const server = value('GITHUB_SERVER_URL');
+    const repository = value('GITHUB_REPOSITORY');
+    const workflowRef = value('GITHUB_WORKFLOW_REF');
+    const workflowPath = workflowRef.replace(`${repository}/`, '').split('@')[0];
+    return {
+        buildDefinition: {
+            buildType: 'https://actions.github.io/buildtypes/workflow/v1',
+            externalParameters: {
+                workflow: {
+                    ref: value('GITHUB_REF'),
+                    repository: `${server}/${repository}`,
+                    path: workflowPath
+                }
+            },
+            internalParameters: {
+                github: {
+                    event_name: value('GITHUB_EVENT_NAME'),
+                    repository_id: value('GITHUB_REPOSITORY_ID'),
+                    repository_owner_id: value('GITHUB_REPOSITORY_OWNER_ID'),
+                    runner_environment: value('RUNNER_ENVIRONMENT')
+                }
+            },
+            resolvedDependencies: [
+                {
+                    uri: `git+${server}/${repository}@${value('GITHUB_REF')}`,
+                    digest: { gitCommit: value('GITHUB_SHA') }
+                }
+            ]
+        },
+        runDetails: {
+            builder: { id: `${server}/${workflowRef}` },
+            metadata: {
+                invocationId: `${server}/${repository}/actions/runs/${value('GITHUB_RUN_ID')}/attempts/${value('GITHUB_RUN_ATTEMPT')}`
+            }
+        }
+    };
+}
+function subject(file, sha256) {
+    return { name: path$2.basename(file), digest: { sha256 } };
+}
+function statement(subjects, predicateType, predicate) {
+    return {
+        _type: STATEMENT_TYPE,
+        subject: subjects,
+        predicateType,
+        predicate
+    };
+}
+
+/** Subdirectory (under `output-directory`) that holds the signed bundles. */
 const PROVENANCE_BUNDLE = 'provenance.sigstore.json';
 const SBOM_BUNDLE = 'sbom.sigstore.json';
 const VALIDATION_BUNDLE = 'validation.sigstore.json';
-/** Predicate-type URI for a CycloneDX SBOM document (version-independent). */
-const CYCLONEDX_PREDICATE_TYPE = 'https://cyclonedx.org/bom';
 /**
  * GitHub-native signing via the `@actions/attest` toolkit library (the same
  * library behind the `actions/attest` action), using GitHub Actions OIDC. It
@@ -83219,13 +83405,6 @@ function attestationUrl(id) {
  * defaulting to `v2.3` when the field is absent or malformed; CycloneDX carries
  * no version in its predicate type.
  */
-function sbomPredicateType(format, doc) {
-    if (format === 'cyclonedx-json')
-        return CYCLONEDX_PREDICATE_TYPE;
-    const raw = doc.spdxVersion;
-    const match = typeof raw === 'string' ? /^SPDX-(\d+\.\d+)$/.exec(raw) : null;
-    return `https://spdx.dev/Document/v${match ? match[1] : '2.3'}`;
-}
 /** Log a non-primary attestation's URL to the workflow log. */
 function logAttestation(label, id) {
     if (id)
@@ -83250,6 +83429,139 @@ function isUnsupportedPlanError(error) {
     return /forbidden|not found|not accessible|advanced security/i.test(message);
 }
 
+const BUNDLE_MEDIA_TYPE = 'application/vnd.dev.sigstore.bundle.v0.3+json';
+/** Offline encrypted-key signing with no Fulcio, OIDC, Rekor, or TSA service. */
+class CosignKeySigner {
+    keyReference;
+    constructor(keyReference) {
+        this.keyReference = keyReference;
+    }
+    async sign(ctx) {
+        const password = process.env.COSIGN_PASSWORD;
+        if (!password) {
+            throw new Error('signer "cosign-key" requires the COSIGN_PASSWORD environment variable for the encrypted key.');
+        }
+        const cosignDir = await ensureBinary('cosign');
+        const cosign = path$2.join(cosignDir, 'cosign');
+        const statements = await buildExternalStatements(ctx);
+        const finalBundleDir = path$2.join(ctx.outputDir, BUNDLE_DIR);
+        const stagingRoot = await fs$1.promises.mkdtemp(path$2.join(ctx.outputDir, '.attestations-'));
+        const stagingBundleDir = path$2.join(stagingRoot, BUNDLE_DIR);
+        try {
+            await fs$1.promises.access(finalBundleDir).then(() => {
+                throw new Error(`attestation bundle directory "${finalBundleDir}" already exists; refusing to overwrite it.`);
+            }, () => undefined);
+            await fs$1.promises.mkdir(stagingBundleDir);
+            const configPath = path$2.join(stagingRoot, 'signing-config.json');
+            const publicKeyPath = path$2.join(stagingRoot, 'cosign.pub');
+            await exec(cosign, [
+                'signing-config',
+                'create',
+                '--no-default-fulcio',
+                '--no-default-oidc',
+                '--no-default-rekor',
+                '--no-default-tsa',
+                '--out',
+                configPath
+            ], {
+                displayLabel: 'cosign signing-config create (no services)',
+                silent: true
+            });
+            await exec(cosign, ['public-key', '--key', this.keyReference, '--outfile', publicKeyPath], {
+                displayLabel: 'cosign public-key --key [REDACTED]',
+                silent: true,
+                redactStderr: true
+            });
+            for (const item of statements) {
+                await this.signAndVerify({
+                    cosign,
+                    ctx,
+                    item,
+                    configPath,
+                    publicKeyPath,
+                    stagingRoot,
+                    stagingBundleDir
+                });
+            }
+            await fs$1.promises.rename(stagingBundleDir, finalBundleDir);
+            return {
+                bundleDir: finalBundleDir,
+                bundles: statements.map(({ role, filename }) => ({
+                    role,
+                    path: path$2.join(finalBundleDir, filename)
+                }))
+            };
+        }
+        finally {
+            await fs$1.promises.rm(stagingRoot, { recursive: true, force: true });
+        }
+    }
+    async signAndVerify(options) {
+        const { cosign, ctx, item, configPath, publicKeyPath } = options;
+        const statementPath = path$2.join(options.stagingRoot, `${item.role}.json`);
+        const bundlePath = path$2.join(options.stagingBundleDir, item.filename);
+        await fs$1.promises.writeFile(statementPath, JSON.stringify(item.statement, null, 2));
+        await exec(cosign, [
+            'attest-blob',
+            '--statement',
+            statementPath,
+            '--key',
+            this.keyReference,
+            '--bundle',
+            bundlePath,
+            '--signing-config',
+            configPath,
+            '--yes'
+        ], {
+            displayLabel: `cosign attest-blob (${item.role}, key [REDACTED])`,
+            silent: true,
+            redactStderr: true
+        });
+        await assertBundle(bundlePath, item.statement);
+        await exec(cosign, [
+            'verify-blob-attestation',
+            '--bundle',
+            bundlePath,
+            '--key',
+            publicKeyPath,
+            '--insecure-ignore-tlog',
+            '--digest',
+            ctx.disk.sha256,
+            '--digestAlg',
+            'sha256',
+            '--type',
+            item.predicateType
+        ], {
+            displayLabel: `cosign verify-blob-attestation (${item.role})`,
+            silent: true
+        });
+    }
+}
+async function assertBundle(bundlePath, intendedStatement) {
+    const bundle = JSON.parse(await fs$1.promises.readFile(bundlePath, 'utf8'));
+    if (bundle.mediaType !== BUNDLE_MEDIA_TYPE) {
+        throw new Error(`Cosign produced an unexpected bundle media type.`);
+    }
+    // Sigstore bundle JSON omits empty repeated fields, so v0.3 key-backed
+    // bundles may carry no `tlogEntries` property at all. Omitted and [] both
+    // mean zero entries; any present non-array value or non-empty array violates
+    // this backend's explicit no-transparency contract.
+    const tlogEntries = bundle.verificationMaterial?.tlogEntries;
+    if (tlogEntries !== undefined && !Array.isArray(tlogEntries)) {
+        throw new Error('Cosign bundle has invalid transparency-log metadata.');
+    }
+    if (Array.isArray(tlogEntries) && tlogEntries.length !== 0) {
+        throw new Error('Cosign unexpectedly published transparency-log material for signer "cosign-key".');
+    }
+    if (typeof bundle.dsseEnvelope?.payload !== 'string') {
+        throw new Error('Cosign bundle is missing its DSSE payload.');
+    }
+    const signedStatement = JSON.parse(Buffer.from(bundle.dsseEnvelope.payload, 'base64').toString('utf8'));
+    if (JSON.stringify(signedStatement) !== JSON.stringify(intendedStatement)) {
+        throw new Error('Cosign bundle payload does not match the intended statement.');
+    }
+}
+
 /**
  * Select the signing backend named by `inputs.signer`. Returns `null` for
  * `none` (no signing) and a `GithubSigner` for `github`. Every other value is a
@@ -83263,10 +83575,12 @@ function selectSigner(inputs) {
             return null;
         case 'github':
             return new GithubSigner(inputs.githubToken);
+        case 'cosign-key':
+            return new CosignKeySigner(inputs.signingKey);
         default:
-            throw new Error(`signer "${inputs.signer}" is not yet implemented. v1 supports ` +
-                'only "none" and "github"; the external backends ' +
-                '(sigstore-keyless, cosign-key, kms) are a post-v1 extension point, ' +
+            throw new Error(`signer "${inputs.signer}" is not yet implemented. This release supports ` +
+                '"none", "github", and "cosign-key"; the remaining external backends ' +
+                '(sigstore-keyless and kms) are later extension points, ' +
                 'and this action never falls back to a different backend.');
     }
 }
@@ -83495,13 +83809,17 @@ async function run() {
                     : {})
             },
             evidence,
-            ...(signResult ? { attestationUrl: signResult.attestationUrl } : {})
+            ...(signResult?.attestationUrl
+                ? { attestationUrl: signResult.attestationUrl }
+                : {})
         });
         // Set outputs only after the full handoff has been written. Attestation
         // outputs are set only when a signer completed on a passing result.
         if (signResult) {
             setOutput('attestation-bundle-path', signResult.bundleDir);
-            setOutput('attestation-url', signResult.attestationUrl);
+            if (signResult.attestationUrl) {
+                setOutput('attestation-url', signResult.attestationUrl);
+            }
         }
         setOutput('disk-digest', `sha256:${disk.sha256}`);
         setOutput('checksums-path', checksumsPath);

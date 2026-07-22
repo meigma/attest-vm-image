@@ -205,33 +205,34 @@ behavior, not a defect, on any run whose result was `fail`. See the
 [troubleshooting guide](troubleshooting.md) for spotting it in a log.
 
 The same principle explains why there is no signer fallback. When you ask for a
-signer the action cannot provide — one of the not-yet-implemented backends, or
-`github` on a repository whose plan cannot issue attestations — the action fails
-with a named cause and never quietly signs with something else or drops to
-unsigned output. The choice of signer is a trust decision that only the caller
-can legitimately make. Silently downgrading it would hand you an artifact signed
-by a method or identity you did not choose, or leave you believing something was
-signed when it was not. A hard failure is the honest outcome; the
+signer the action cannot provide — `sigstore-keyless` or `kms`, or `github` on a
+repository whose plan cannot issue attestations — the action fails with a named
+cause and never quietly signs with something else or drops to unsigned output.
+The choice of signer is a trust decision that only the caller can legitimately
+make. Silently downgrading it would hand you an artifact signed by a method or
+identity you did not choose, or leave you believing something was signed when it
+was not. A hard failure is the honest outcome; the
 [permissions](reference.md#permissions) reference lays out exactly what
 `signer: github` requires.
 
 ## How it trusts its own tools
 
 A consumer's runner is not the action's development environment. The action
-cannot assume that `qemu`, `libguestfs`, `syft`, or `grype` are already present,
-so it installs them itself on every run — which is also why it needs `apt` and
-`sudo` on the runner (see [requirements](reference.md#requirements)). More
-interesting than _that_ it acquires tools is _how it decides to trust_ what it
-downloads, because it uses two different trust models for two classes of tool.
+cannot assume that `qemu`, `libguestfs`, `syft`, `grype`, or an optionally
+needed `cosign` are already present, so it installs them itself on every run —
+which is also why it needs `apt` and `sudo` on the runner (see
+[requirements](reference.md#requirements)). More interesting than _that_ it
+acquires tools is _how it decides to trust_ what it downloads, because it uses
+two different trust models for two classes of tool.
 
-`syft` and `grype` arrive as **pinned, digest-verified binaries**. Each is
-downloaded from GitHub Releases at an exact version, and the bytes are checked
-against a SHA-256 digest baked into the action for that precise version and
-platform. A mismatch aborts the run before the tool is ever extracted or
-executed. The pin is the trust anchor: it changes only through a reviewed change
-to the action itself, so a compromised or swapped release asset cannot slip in
-unnoticed between runs. The exact pinned versions are in the
-[tool versions](reference.md#tool-versions) reference.
+`syft`, `grype`, and (only when external signing needs it) `cosign` arrive as
+**pinned, digest-verified binaries**. Each is downloaded from GitHub Releases at
+an exact version, and the bytes are checked against a SHA-256 digest baked into
+the action for that precise version and platform. A mismatch aborts the run
+before the tool is ever extracted or executed. The pin is the trust anchor: it
+changes only through a reviewed change to the action itself, so a compromised or
+swapped release asset cannot slip in unnoticed between runs. The exact pinned
+versions are in the [tool versions](reference.md#tool-versions) reference.
 
 `qemu-utils` and `libguestfs-tools` arrive as **unpinned `apt` packages** from
 Ubuntu's signed archive. They carry no version pin — not because they matter

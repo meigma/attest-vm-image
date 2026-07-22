@@ -10,6 +10,10 @@ export interface ExecResult {
 
 /** Options for {@link exec}; a focused subset of `@actions/exec` options. */
 export interface ExecOptions {
+  /** Redacted workflow-log label; defaults to the full command line. */
+  displayLabel?: string
+  /** Omit captured stderr from thrown errors for secret-bearing commands. */
+  redactStderr?: boolean
   /** Working directory; defaults to the current process directory. */
   cwd?: string
   /** Environment variables; defaults to the current process environment. */
@@ -28,8 +32,9 @@ export interface ExecOptions {
 /**
  * Run a command through `@actions/exec`, capturing stdout, stderr, and the exit
  * code. Every invocation is wrapped in a `core.startGroup`/`endGroup` labelled
- * with the full command line so each tool call is a foldable section in the
- * workflow log. By default a non-zero exit throws; pass
+ * with a caller-controlled label so each tool call is a foldable section in
+ * the workflow log. By default the full command line is used; secret-bearing
+ * callers must provide `displayLabel`. By default a non-zero exit throws; pass
  * `opts.ignoreReturnCode` to receive the result instead.
  */
 export async function exec(
@@ -37,7 +42,8 @@ export async function exec(
   args: string[] = [],
   opts: ExecOptions = {}
 ): Promise<ExecResult> {
-  const label = [cmd, ...args].join(' ')
+  const commandLine = [cmd, ...args].join(' ')
+  const label = opts.displayLabel ?? commandLine
   core.startGroup(label)
   try {
     const result = await actionsExec.getExecOutput(cmd, args, {
@@ -51,7 +57,7 @@ export async function exec(
     })
 
     if (!opts.ignoreReturnCode && result.exitCode !== 0) {
-      const detail = result.stderr.trim()
+      const detail = opts.redactStderr ? '' : result.stderr.trim()
       throw new Error(
         `Command failed with exit code ${result.exitCode}: ${label}` +
           (detail ? `\n${detail}` : '')
