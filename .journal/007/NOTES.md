@@ -92,3 +92,25 @@ and repeated packaging produced identical bundle hashes. The full pre-commit
 `dist/` changes differ from `HEAD`; rerun the full gate after the implementation
 commit, then push and verify the real hosted integration before considering the
 slice complete.
+
+## 2026-07-22 07:30 — Slice 1 complete and ready for review
+
+Completed the `cosign-key` vertical slice in PR #22 at exact head
+`5f8963f931eef0c2764b1e70f9c230a40d2ed89a`. After committing the packaged
+action, the full pinned-runtime `moon run root:check` passed with 230 tests plus
+format, lint, audit, docs, package, and committed-dist checks.
+
+The first hosted integration exposed one useful Cosign v3 serialization detail:
+an empty `verificationMaterial.tlogEntries` repeated field is omitted rather
+than emitted as `[]`. Production validation now accepts only omitted or empty
+metadata and still rejects every non-empty transparency-log set; focused tests
+cover both encodings.
+
+Hosted run `29928056109` then passed at the exact PR head. The legacy GitHub
+signer created and verified its three bundles and retained its attestation URL.
+The new encrypted-key path generated a throwaway key, signed all three complete
+statements with no external transparency or timestamp service, verified the
+bundles, confirmed zero transparency-log entries, left the URL unset, and
+rejected changed-digest and tampered-signature cases. CI, GitHub Pages, and
+Kusari Inspector also passed. Slice 1 is complete; `sigstore-keyless` and `kms`
+remain later slices.
