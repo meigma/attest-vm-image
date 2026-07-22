@@ -7,8 +7,8 @@ Date: 2026-07-22
 Action commit: `9ce3ee47c64a8aa211916394424c5b0d60617af3`
 
 Disposable consumer repository:
-`meigma/attest-vm-image-private-consumer-smoke` (private; removed after the
-proof)
+`meigma/attest-vm-image-private-consumer-smoke` (private; secrets removed,
+Actions disabled, and repository archived after the proof)
 
 Consumer workflow commit: `98eaed30112342d49cd15eef083419fc7249eab4`
 
@@ -51,3 +51,11 @@ This passes Slice 4's private-repository consumer exit gate. It proves the
 encrypted-key backend is usable without GitHub's plan-gated signer and that a
 consumer can independently verify the validation bundle from downloaded
 evidence. It does not replace Slice 3's still-pending live AWS KMS canary.
+
+## Cleanup
+
+Repository deletion was attempted, but the current GitHub CLI token does not
+have the separate `delete_repo` OAuth scope. The two Cosign secrets were
+therefore deleted, GitHub Actions was disabled, and the private repository was
+archived. The local temporary repository, private key, public key, and
+downloaded artifact were moved to Trash.

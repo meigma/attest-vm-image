@@ -255,3 +255,28 @@ bundle against the separate public key and disk digest. Detailed evidence is in
 `SLICE4_PRIVATE_CONSUMER_REPORT.md`. The disposable repository is ready for
 deletion; next is the stacked PR and ordinary hosted checks. The live AWS KMS
 canary remains a separate Slice 3 prerequisite.
+
+## 2026-07-22 09:03 — Slice 4 published for review
+
+Published Slice 4 as draft PR #25, stacked directly on `feat/kms-signing` from
+PR #24. Its exact final head is
+`ef9697909734648c269c6892842509a5b7816447`; the review diff contains two
+focused commits and ten files. Merge order remains #22, then #23, then #24,
+then #25.
+
+The first hosted CI run exposed a real concurrency race: Moon ran formatting
+and packaging together, so Prettier sometimes tried to read Rollup's transient
+`rollup.config-*.mjs` after Rollup removed it. Commit `ef96979` adds only the
+focused Prettier ignore. Local `moon ci --summary minimal` passed under the same
+concurrency, and CI, GitHub Pages, Kusari Inspector, and both ordinary
+Integration jobs passed at the exact final head. The Integration run proved the
+unsigned, validation-failure, encrypted-key, and GitHub signing contracts in a
+seeded VM image.
+
+PR #25 remains draft because its parent KMS slice still needs the separately
+provisioned live AWS canary. The private consumer proof remains pinned to the
+action-bearing parent commit `9ce3ee4`; the second commit changes only
+`.prettierignore`. Repository deletion was attempted after the private proof,
+but the current CLI token lacks the separate `delete_repo` scope. Both Cosign
+secrets were removed, Actions was disabled, and the private repository was
+archived. The local temporary repository and key material were moved to Trash.
