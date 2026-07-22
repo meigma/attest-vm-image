@@ -89,3 +89,15 @@ mergeable. All hosted checks passed: the new strict `GitHub Pages` build, CI,
 Kusari Inspector, and both real-image integration jobs (`build-image` and
 `sign-image`). The deploy job correctly skipped on the pull request and will run
 only after the change reaches main.
+
+## 2026-07-21 17:38 — Close
+
+Squash-merged approved PR #18 as `fd127cb`, fast-forwarded local main, removed
+the Worktrunk feature worktree and local/remote branch, and verified post-merge
+CI, Release Please, GitHub Pages, Dependabot validation, and both real-image
+integration jobs. The Pages deployment completed and
+https://meigma.github.io/attest-vm-image/ returns HTTP 200. Release PR #16 was
+refreshed on the new main and all checks pass; it remains open for the actual
+1.0.0 release. Dependabot PR #19, created after the merge, also remains open.
+Session handoff is recorded in `SUMMARY.md` and durable release/docs state in
+`TECH_NOTES.md`.

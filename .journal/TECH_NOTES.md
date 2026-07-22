@@ -4,14 +4,17 @@
 
 - v1 (plan Phases 0-5) is implemented and merged (PRs #7-#12, session 002).
   Post-v1 = one external signing backend behind `src/sign/` on real demand.
-  No release exists yet; the initial release and released-major-tag smoke
-  remain open.
-- docs/design.md + docs/plan.md were DELETED in PR #17 (session 005); the
-  code is the spec. docs/ is now an operator-facing Diátaxis set; docs/
-  reference.md owns every shared fact behind a fixed anchor contract (other
-  docs link, never restate) and its builtin/v1 JSON must track
-  src/contamination.ts. All doc examples pin @v1 (resolves after the first
-  release). gh-attestation facts field-tested with gh 2.94.0: --bundle
+  Release App credentials are configured and Release Please is healthy; PR #16
+  targets 1.0.0 and is green. No release exists yet, so merging #16 and smoking
+  the resulting release plus moving `v1` tag remain open.
+- docs/design.md + docs/plan.md were DELETED in PR #17 (session 005); the code
+  is the spec. `docs/docs/` is the operator-facing Diátaxis set, published via
+  Material for MkDocs at https://meigma.github.io/attest-vm-image/. Build it
+  strictly with `moon run docs:build`; `.github/workflows/docs-pages.yml` builds
+  PRs and deploys main. `docs/docs/reference.md` owns every shared fact behind a
+  fixed anchor contract (other docs link, never restate), and its builtin/v1
+  JSON must track src/contamination.ts. All doc examples pin @v1 (resolves after
+  the first release). gh-attestation facts field-tested with gh 2.94.0: --bundle
   accepts single-object .sigstore.json but still fetches the TUF trust
   root; air-gapped verify needs --custom-trusted-root; non-provenance
   bundles need --predicate-type; non-TTY success prints nothing.
