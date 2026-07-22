@@ -59,3 +59,10 @@ visibility.
 Full results and Slice 1 consequences are in
 `.journal/007/PHASE0_SIGNING_PROBE_REPORT.md`. The Phase 0 exit gate passed; no
 production action code changed. Await explicit approval before Slice 1.
+
+## 2026-07-21 22:32 — Disposable probe cleaned up
+
+After checkpointing the report, deleted remote branch
+`feat/phase-0-signing-probe`, its Worktrunk checkout, and its local branch. Main
+remains clean at `2646b5c`; the successful hosted run and permanent Rekor entry
+remain as the report's evidence.

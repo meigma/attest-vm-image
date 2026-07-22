@@ -176,6 +176,7 @@ recoverable there; they contain no private key. The hosted artifact contains
 only public statements, bundle, certificate, and result data and expires after
 one day.
 
-The single Rekor entry is intentionally permanent and cannot be removed. The
-disposable workflow branch is not a product change and should be deleted after
-this report is checkpointed.
+The single Rekor entry is intentionally permanent and cannot be removed. After
+this report was checkpointed, the disposable remote branch, local worktree, and
+local branch were deleted. The successful Actions run retains the exact probe
+commit and logs as evidence; no probe workflow remains on an active branch.
