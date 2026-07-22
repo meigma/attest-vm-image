@@ -114,3 +114,28 @@ bundles, confirmed zero transparency-log entries, left the URL unset, and
 rejected changed-digest and tampered-signature cases. CI, GitHub Pages, and
 Kusari Inspector also passed. Slice 1 is complete; `sigstore-keyless` and `kms`
 remain later slices.
+
+## 2026-07-22 07:41 — Slice 2 ready for packaged commit
+
+Started `feat/sigstore-keyless-signing` as a focused stack on the exact green
+Slice 1 head; PR #22 remains unmodified and unmerged. The shared Cosign engine
+now has a keyless configuration that forces the noninteractive GitHub Actions
+OIDC provider, emits a prominent permanent-public-transparency notice, requires
+exactly one Rekor entry per bundle, and self-verifies all three bundles against
+`${GITHUB_SERVER_URL}/${GITHUB_WORKFLOW_REF}` plus the GitHub Actions issuer.
+
+Input validation now requires the Actions OIDC request environment and names
+the missing `id-token: write` permission before tool download or disk access.
+No signing key, GitHub API write scope, credential input, permissive identity
+pattern, or fallback was added. The opt-in hosted smoke runs only when a
+maintainer applies `integration:keyless` to a trusted same-repository PR, so a
+normal push cannot create permanent public entries. It includes a no-OIDC job
+that checks the packaged early diagnostic and an OIDC-only job that verifies
+all three bundles with exact identity and issuer.
+
+Current local evidence: 235 tests pass; format, lint, audit, strict docs, and
+Actionlint pass; `dist/` is regenerated; and the packaged entrypoint fails with
+the intended named OIDC diagnostic when run without permission. Next: commit,
+run the complete committed-dist gate, publish the stacked PR, deliberately
+trigger its public smoke once, and inspect the hosted results before declaring
+Slice 2 complete.
