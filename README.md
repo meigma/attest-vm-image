@@ -70,7 +70,7 @@ steps:
 
 Keyless signing permanently publishes the repository, workflow, ref, commit,
 run, and certificate identity to public Sigstore transparency services. Use an
-encrypted Cosign key instead when that identity must remain private.
+encrypted Cosign or KMS key instead when that identity must remain private.
 
 Private repositories that cannot use GitHub's attestation API can produce
 portable, offline bundles with an encrypted Cosign key instead. Keep the private
@@ -91,6 +91,12 @@ steps:
       signing-key: env://COSIGN_PRIVATE_KEY
 ```
 
+The same portable, no-public-log bundle contract is available with `signer: kms`
+for non-exportable AWS KMS, Google Cloud KMS, Azure Key Vault, HashiCorp Vault
+Transit, and OpenBao Transit keys. Authenticate to the provider in a preceding
+step and pass only an immutable or versioned KMS URI; see the [signing
+guide][signing] for the allowlisted forms and provider status.
+
 Signing has repository plan and visibility requirements, and a failing result is
 never signed — see [Publish signed attestations][signing]. For a complete,
 runnable workflow, start with the [Getting started][getting-started] tutorial.
@@ -106,7 +112,8 @@ Every input and output is listed in the [reference][reference].
 - Outbound network access to `github.com` for the pinned `syft`, `grype`, and
   external-signing `cosign` binaries, to the Grype vulnerability database, to
   the GitHub attestation API for `signer: github`, and to GitHub OIDC plus the
-  public Sigstore services for `signer: sigstore-keyless`.
+  public Sigstore services for `signer: sigstore-keyless`, or to the selected
+  provider endpoint for `signer: kms`.
 
 The full runner, privilege, and network catalog is in the
 [reference][requirements].
@@ -116,7 +123,7 @@ The full runner, privilege, and network catalog is in the
 - [Getting started][getting-started] — tutorial: wire the action into a
   workflow, produce a folder of evidence, and verify it yourself.
 - [Publish signed attestations][signing] — how-to: publish with GitHub, public
-  Sigstore keyless identity, or an encrypted Cosign key.
+  Sigstore keyless identity, an encrypted Cosign key, or a KMS key.
 - [Verify evidence and attestations][verification] — how-to: verify checksums
   and published attestations as a downstream consumer.
 - [Control what fails validation][validation-policy] — how-to: tune the

@@ -35,6 +35,10 @@ describe('inputs.ts', () => {
     delete process.env.COSIGN_PRIVATE_KEY
     delete process.env.ACTIONS_ID_TOKEN_REQUEST_URL
     delete process.env.ACTIONS_ID_TOKEN_REQUEST_TOKEN
+    delete process.env.VAULT_ADDR
+    delete process.env.VAULT_TOKEN
+    delete process.env.BAO_ADDR
+    delete process.env.BAO_TOKEN
   })
 
   it('applies defaults when only disk-path is provided', () => {
@@ -118,6 +122,76 @@ describe('inputs.ts', () => {
       'signer "kms" requires a signing-key reference, but none was provided.'
     )
   })
+
+  it.each([
+    'awskms:///arn:aws:kms:us-west-2:111122223333:key/1234abcd-12ab-34cd-56ef-1234567890ab',
+    'gcpkms://projects/project/locations/global/keyRings/ring/cryptoKeys/key/versions/1',
+    'azurekms://vault-name.vault.azure.net/signing-key/0123456789abcdef',
+    'hashivault://cosign-key',
+    'openbao://cosign-key'
+  ])('accepts the allowlisted KMS reference %s', (signingKey) => {
+    process.env.VAULT_ADDR = 'https://vault.example'
+    process.env.VAULT_TOKEN = 'vault-token'
+    process.env.BAO_ADDR = 'https://bao.example'
+    process.env.BAO_TOKEN = 'bao-token'
+    withInputs({
+      'disk-path': 'disk.qcow2',
+      signer: 'kms',
+      'signing-key': signingKey
+    })
+
+    expect(parseInputs().signingKey).toBe(signingKey)
+    expect(core.setSecret).toHaveBeenCalledWith(signingKey)
+  })
+
+  it.each([
+    'awskms:///alias/signing-key',
+    'awskms://localhost:4566/arn:aws:kms:us-west-2:111122223333:key/1234abcd-12ab-34cd-56ef-1234567890ab',
+    'gcpkms://projects/project/locations/global/keyRings/ring/cryptoKeys/key',
+    'azurekms://vault-name.vault.azure.net/signing-key',
+    'hashivault://nested/key',
+    'k8s://namespace/key'
+  ])('rejects the unsafe or unsupported KMS reference %s', (signingKey) => {
+    withInputs({
+      'disk-path': 'disk.qcow2',
+      signer: 'kms',
+      'signing-key': signingKey
+    })
+
+    const error = (() => {
+      try {
+        parseInputs()
+      } catch (caught) {
+        return caught as Error
+      }
+      throw new Error('expected parseInputs to throw')
+    })()
+    expect(error.message).toMatch(/immutable awskms, gcpkms, or azurekms/)
+    expect(error.message).not.toContain(signingKey)
+  })
+
+  it.each([
+    ['hashivault://cosign', 'VAULT_ADDR', 'VAULT_TOKEN'],
+    ['openbao://cosign', 'BAO_ADDR', 'BAO_TOKEN']
+  ] as const)(
+    'preflights ambient Transit credentials for %s',
+    (signingKey, addressName, tokenName) => {
+      withInputs({
+        'disk-path': 'disk.qcow2',
+        signer: 'kms',
+        'signing-key': signingKey
+      })
+
+      expect(() => parseInputs()).toThrow(
+        new RegExp(`${addressName} and ${tokenName}`)
+      )
+
+      process.env[addressName] = 'https://transit.example'
+      process.env[tokenName] = 'transit-token'
+      expect(parseInputs().signer).toBe('kms')
+      expect(core.setSecret).toHaveBeenCalledWith('transit-token')
+    }
+  )
 
   it('does not require a signing-key for the github backend', () => {
     withInputs({ 'disk-path': 'disk.qcow2', signer: 'github' })

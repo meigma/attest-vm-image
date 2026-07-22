@@ -1,7 +1,7 @@
 # How to sign attestations
 
 Switch a working unsigned run to GitHub-published attestations, public Sigstore
-keyless bundles, or portable bundles signed with an encrypted Cosign key.
+keyless bundles, or portable bundles signed with an encrypted Cosign or KMS key.
 
 ## Prerequisites
 
@@ -17,6 +17,8 @@ keyless bundles, or portable bundles signed with an encrypted Cosign key.
   disclosed permanently through public Sigstore transparency services.
 - For `signer: cosign-key`, Cosign `v3.1.2` on the administrator machine that
   creates the key, plus a separate trusted way to distribute `cosign.pub`.
+- For `signer: kms`, an asymmetric signing key, provider credentials established
+  before this action runs, and a trusted way to distribute its public key.
 
 ## Choose a signing backend
 
@@ -25,9 +27,10 @@ keyless bundles, or portable bundles signed with an encrypted Cosign key.
 | `github`           | The repository can use GitHub's attestation API.          | GitHub OIDC and the GitHub attestation API.     |
 | `sigstore-keyless` | Verifiers should trust an exact workflow identity.        | GitHub OIDC, Fulcio, Rekor, CT, and TUF.        |
 | `cosign-key`       | A private repository needs portable, key-trusted bundles. | None while signing; bundles stay on the runner. |
+| `kms`              | The signing key must remain non-exportable.               | The selected KMS or Transit API only.           |
 
-Both modes create the same three stable bundle roles. Only `github` publishes
-them and sets `attestation-url`.
+All signing modes create the same three stable bundle roles. Only `github`
+publishes them and sets `attestation-url`.
 
 ## Publish with GitHub
 
@@ -245,11 +248,89 @@ public key before atomically exposing the bundle directory.
 
 ### 4. Verify with the independently trusted public key
 
-Follow the `cosign-key` procedure in
-[Verify evidence and attestations](verification.md#verify-cosign-key-bundles).
+Follow the key-backed procedure in
+[Verify evidence and attestations](verification.md#verify-cosign-key-and-kms-bundles).
 The `--insecure-ignore-tlog` flag is required because this mode intentionally
 has no transparency entry; it does not disable public-key signature or subject
 verification.
+
+## Sign with a KMS or Transit key
+
+Use this mode when the private key must remain inside a cloud KMS or Transit
+service. The action accepts only the pinned locator forms below; aliases,
+unversioned cloud keys, custom AWS endpoints, KMS plugins, and raw key material
+fail input validation.
+
+| Provider         | `signing-key` form                                                   | Authentication established before this action |
+| ---------------- | -------------------------------------------------------------------- | --------------------------------------------- |
+| AWS KMS          | `awskms:///arn:aws:kms:REGION:ACCOUNT:key/UUID`                      | AWS SDK ambient credentials                   |
+| Google Cloud KMS | `gcpkms://projects/P/locations/L/keyRings/R/cryptoKeys/K/versions/N` | Application Default Credentials               |
+| Azure Key Vault  | `azurekms://VAULT.vault.azure.net/KEY/VERSION`                       | Azure default credential environment          |
+| HashiCorp Vault  | `hashivault://KEY`                                                   | `VAULT_ADDR` and `VAULT_TOKEN`                |
+| OpenBao          | `openbao://KEY`                                                      | `BAO_ADDR` and `BAO_TOKEN`                    |
+
+These five forms are supported by the action's URI contract and are derived from
+the Cosign `v3.1.2` provider parsers. The validation and dispatch paths are
+unit-tested, but they have not yet been field-tested against live provider keys
+in this repository. Do not interpret support as a claim that every provider's
+IAM and service configuration has been exercised here.
+
+### Authenticate in a preceding step
+
+Do not pass cloud credentials to `attest-vm-image`. For AWS, exchange the
+workflow's OIDC identity for short-lived credentials before invoking the action:
+
+```yaml
+jobs:
+  attest:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      # Earlier steps build build/disk.qcow2.
+      - name: Configure short-lived AWS credentials
+        uses: aws-actions/configure-aws-credentials@517a711dbcd0e402f90c77e7e2f81e849156e31d # v6.2.2
+        with:
+          aws-region: ${{ vars.AWS_KMS_REGION }}
+          role-to-assume: ${{ secrets.AWS_KMS_ROLE_ARN }}
+
+      - uses: meigma/attest-vm-image@v1
+        with:
+          disk-path: build/disk.qcow2
+          signer: kms
+          signing-key: ${{ format('awskms:///{0}', secrets.AWS_KMS_KEY_ARN) }}
+```
+
+Scope the assumed role to the exact key ARN and only the operations the Cosign
+AWS provider uses: `kms:DescribeKey`, `kms:GetPublicKey`, and `kms:Sign`. The
+key must be asymmetric with `SIGN_VERIFY` usage. Restrict the AWS OIDC trust
+policy to the repository and protected workflow environment or branch that
+performs signing.
+
+Other cloud providers follow the same boundary: their official authentication
+action runs first, and `attest-vm-image` consumes only the resulting ambient
+credential chain. Vault and OpenBao tokens must be short-lived and limited to
+reading the named Transit key plus signing with it.
+
+### Distribute the public key and retain the bundles
+
+Export the public key from a trusted administrative environment and distribute
+it independently from the image and bundles:
+
+```bash
+cosign public-key --key "$KMS_URI" > kms.pub
+```
+
+The action performs the same export into temporary runner storage, verifies all
+three bundles against it, and then removes it. For Vault and OpenBao, whose URI
+cannot pin a key version, it exports again after all three signatures and fails
+without promoting bundles if the public-key fingerprint changed.
+
+No Fulcio, OIDC, Rekor, or TSA service is configured for KMS signing.
+`attestation-url` remains unset. Verify the retained bundles against the
+independently trusted `kms.pub` using
+[Verify `cosign-key` and `kms` bundles](verification.md#verify-cosign-key-and-kms-bundles).
 
 ## Troubleshooting
 
@@ -295,11 +376,13 @@ missing `id-token: write` permission before any tool or disk access. Run the
 signing job on same-repository pushes or same-repo pull requests and grant the
 permission shown above.
 
-### The run failed with a "not yet implemented" signer error
+### KMS signing failed after input validation
 
-`kms` remains a later slice. Selecting it throws when the signing step is
-reached on a passing result. Use `github`, `sigstore-keyless`, `cosign-key`, or
-`none` ([reference](reference.md#failure-modes)).
+The URI shape was accepted, but Cosign could not fetch the public key or sign.
+Confirm the preceding provider-authentication step succeeded, the role or token
+can read and sign with the exact key, and the key is an asymmetric signing key.
+KMS locators and provider error output are redacted from action failures;
+inspect the provider authentication step and audit log for the specific denial.
 
 ## Related
 

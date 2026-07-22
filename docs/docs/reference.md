@@ -13,23 +13,23 @@ The action is referenced as `uses: meigma/attest-vm-image@v1`.
 Every input is a string. Only `disk-path` is required; each other input has a
 default or a built-in fallback.
 
-| Input                 | Required | Default               | Allowed values / format                                                                                                                       |
-| --------------------- | -------- | --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| `disk-path`           | Yes      | —                     | Filesystem path to the completed QCOW2 image.                                                                                                 |
-| `metadata-path`       | No       | (unset)               | Filesystem path to an Incus metadata tarball. Validated per [Metadata archive rules](#metadata-archive-rules).                                |
-| `build-manifest-path` | No       | (unset)               | Filesystem path to a builder manifest file. Digested only; its contents are not parsed.                                                       |
-| `output-directory`    | No       | `./evidence`          | Directory the evidence files are written into.                                                                                                |
-| `sbom-format`         | No       | `spdx-json`           | `spdx-json`, `cyclonedx-json`                                                                                                                 |
-| `fail-on-severity`    | No       | `high`                | `critical`, `high`, `none`                                                                                                                    |
-| `policy-path`         | No       | (unset)               | Filesystem path to a custom contamination policy JSON file. When unset, the [built-in policy](#built-in-contamination-policy) applies.        |
-| `signer`              | No       | `none`                | `none`, `github`, `sigstore-keyless`, `cosign-key`, `kms`                                                                                     |
-| `signing-key`         | No       | (unset)               | For `cosign-key`, a readable encrypted key file or `env://NAME`; always a reference, never raw key bytes. Required by `cosign-key` and `kms`. |
-| `github-token`        | No       | `${{ github.token }}` | GitHub token used by `signer: github` to push attestations; must carry `attestations: write`.                                                 |
+| Input                 | Required | Default               | Allowed values / format                                                                                                                                      |
+| --------------------- | -------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `disk-path`           | Yes      | —                     | Filesystem path to the completed QCOW2 image.                                                                                                                |
+| `metadata-path`       | No       | (unset)               | Filesystem path to an Incus metadata tarball. Validated per [Metadata archive rules](#metadata-archive-rules).                                               |
+| `build-manifest-path` | No       | (unset)               | Filesystem path to a builder manifest file. Digested only; its contents are not parsed.                                                                      |
+| `output-directory`    | No       | `./evidence`          | Directory the evidence files are written into.                                                                                                               |
+| `sbom-format`         | No       | `spdx-json`           | `spdx-json`, `cyclonedx-json`                                                                                                                                |
+| `fail-on-severity`    | No       | `high`                | `critical`, `high`, `none`                                                                                                                                   |
+| `policy-path`         | No       | (unset)               | Filesystem path to a custom contamination policy JSON file. When unset, the [built-in policy](#built-in-contamination-policy) applies.                       |
+| `signer`              | No       | `none`                | `none`, `github`, `sigstore-keyless`, `cosign-key`, `kms`                                                                                                    |
+| `signing-key`         | No       | (unset)               | A readable encrypted key file or `env://NAME` for `cosign-key`; an allowlisted KMS URI for `kms`. Always a reference, never raw key bytes. Required by both. |
+| `github-token`        | No       | `${{ github.token }}` | GitHub token used by `signer: github` to push attestations; must carry `attestations: write`.                                                                |
 
 Notes:
 
-- `signer`: `none`, `github`, `sigstore-keyless`, and `cosign-key` are
-  implemented. `kms` fails closed by name when signing is reached.
+- All five `signer` values are implemented. A requested signer never falls back
+  to another backend or to unsigned output.
 - `cosign-key` also requires a non-empty `COSIGN_PASSWORD` environment variable.
   An `env://NAME` reference must name a non-empty environment variable. Both
   resolved secret values are masked before any tools run.
@@ -37,26 +37,43 @@ Notes:
   variable; it comes only from this input (whose default is
   `${{ github.token }}`).
 
+### KMS URI allowlist
+
+| Provider         | Accepted form                                                        | Live validation status                         |
+| ---------------- | -------------------------------------------------------------------- | ---------------------------------------------- |
+| AWS KMS          | `awskms:///arn:PARTITION:kms:REGION:ACCOUNT:key/UUID`                | URI contract supported; field testing pending. |
+| Google Cloud KMS | `gcpkms://projects/P/locations/L/keyRings/R/cryptoKeys/K/versions/N` | URI contract supported; field testing pending. |
+| Azure Key Vault  | `azurekms://VAULT.vault.azure.net/KEY/VERSION`                       | URI contract supported; field testing pending. |
+| HashiCorp Vault  | `hashivault://KEY`                                                   | URI contract supported; field testing pending. |
+| OpenBao          | `openbao://KEY`                                                      | URI contract supported; field testing pending. |
+
+AWS aliases and custom endpoints, unversioned Google Cloud or Azure keys, nested
+Transit paths, `k8s://`, and external KMS plugins are rejected. AWS partitions
+`aws`, `aws-us-gov`, and `aws-cn` are accepted. Vault requires `VAULT_ADDR` plus
+`VAULT_TOKEN`; OpenBao requires `BAO_ADDR` plus `BAO_TOKEN`.
+
 ### Input validation
 
 Inputs are validated up front, before any tool runs. The first invalid input
 fails closed with a distinct message:
 
-| Condition                                               | Message                                                                                                                              |
-| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| `disk-path` empty or unset                              | `disk-path is required but was not provided.`                                                                                        |
-| `sbom-format` not in the allowed set                    | `sbom-format must be one of spdx-json, cyclonedx-json; got "<value>".`                                                               |
-| `fail-on-severity` not in the allowed set               | `fail-on-severity must be one of critical, high, none; got "<value>".`                                                               |
-| `signer` not in the allowed set                         | `signer must be one of none, github, sigstore-keyless, cosign-key, kms; got "<value>".`                                              |
-| `signer` is `cosign-key` or `kms` with no `signing-key` | `signer "<signer>" requires a signing-key reference, but none was provided.`                                                         |
-| `signing-key` supplied to a signer that does not use it | `signer "<signer>" does not accept signing-key; remove the contradictory input.`                                                     |
-| `signing-key` appears to contain private-key bytes      | `signing-key must be a key reference, never raw private-key bytes.`                                                                  |
-| `cosign-key` reference is not a file or `env://NAME`    | `signer "cosign-key" requires signing-key to be a readable encrypted key file or env://NAME.`                                        |
-| `cosign-key` file is missing or unreadable              | `signer "cosign-key" signing-key file does not exist or is not readable.`                                                            |
-| `cosign-key` environment variable is empty              | `signing-key references environment variable <NAME>, but it is unset or empty.`                                                      |
-| `COSIGN_PASSWORD` is empty                              | `signer "cosign-key" requires the COSIGN_PASSWORD environment variable for the encrypted key.`                                       |
-| Keyless OIDC request environment is unavailable         | `signer "sigstore-keyless" requires the job permission id-token: write; the GitHub Actions OIDC request environment is unavailable.` |
-| `policy-path` set but missing or unreadable             | `policy-path "<path>" does not exist or is not readable.`                                                                            |
+| Condition                                               | Message                                                                                                                                      |
+| ------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `disk-path` empty or unset                              | `disk-path is required but was not provided.`                                                                                                |
+| `sbom-format` not in the allowed set                    | `sbom-format must be one of spdx-json, cyclonedx-json; got "<value>".`                                                                       |
+| `fail-on-severity` not in the allowed set               | `fail-on-severity must be one of critical, high, none; got "<value>".`                                                                       |
+| `signer` not in the allowed set                         | `signer must be one of none, github, sigstore-keyless, cosign-key, kms; got "<value>".`                                                      |
+| `signer` is `cosign-key` or `kms` with no `signing-key` | `signer "<signer>" requires a signing-key reference, but none was provided.`                                                                 |
+| `signing-key` supplied to a signer that does not use it | `signer "<signer>" does not accept signing-key; remove the contradictory input.`                                                             |
+| `signing-key` appears to contain private-key bytes      | `signing-key must be a key reference, never raw private-key bytes.`                                                                          |
+| `cosign-key` reference is not a file or `env://NAME`    | `signer "cosign-key" requires signing-key to be a readable encrypted key file or env://NAME.`                                                |
+| `cosign-key` file is missing or unreadable              | `signer "cosign-key" signing-key file does not exist or is not readable.`                                                                    |
+| `cosign-key` environment variable is empty              | `signing-key references environment variable <NAME>, but it is unset or empty.`                                                              |
+| `COSIGN_PASSWORD` is empty                              | `signer "cosign-key" requires the COSIGN_PASSWORD environment variable for the encrypted key.`                                               |
+| `kms` reference is not allowlisted                      | `signer "kms" requires signing-key to be an immutable awskms, gcpkms, or azurekms key-version URI, or a hashivault/openbao Transit key URI.` |
+| Transit address or token is empty                       | `signer "kms" with <provider> requires ambient <ADDR> and <TOKEN> environment variables.`                                                    |
+| Keyless OIDC request environment is unavailable         | `signer "sigstore-keyless" requires the job permission id-token: write; the GitHub Actions OIDC request environment is unavailable.`         |
+| `policy-path` set but missing or unreadable             | `policy-path "<path>" does not exist or is not readable.`                                                                                    |
 
 Custom `policy-path` files are additionally parsed and structurally validated at
 this point; those messages are cataloged under [Failure modes](#failure-modes).
@@ -110,6 +127,7 @@ job must declare them.
 | `github`           | `read`     | `write`    | `write`        |
 | `sigstore-keyless` | `read`     | `write`    | —              |
 | `cosign-key`       | `read`     | —          | —              |
+| `kms`              | `read`     | —          | —              |
 
 Notes:
 
@@ -129,6 +147,13 @@ Notes:
   unset.
 - `signer: cosign-key` needs no OIDC or attestation API permission. The caller
   supplies an encrypted private key and password through runner-local state.
+- `signer: kms` itself needs no GitHub API permission. A preceding cloud
+  authentication step may require `id-token: write`; the action consumes only
+  ambient provider credentials. Vault/OpenBao use their short-lived token
+  environment instead.
+- The AWS principal needs `kms:DescribeKey`, `kms:GetPublicKey`, and `kms:Sign`
+  on the exact asymmetric `SIGN_VERIFY` key ARN. Verification uses the exported
+  public key locally and does not need `kms:Verify`.
 
 ## Requirements
 
@@ -153,13 +178,14 @@ Notes:
   the action runs, which is too late for a preceding step.
 - **Network egress:** the action requires outbound access to:
   - `github.com` release assets — to download the pinned `syft`, `grype`, and,
-    for `signer: sigstore-keyless` or `cosign-key`, `cosign` binaries (see
-    [Tool versions](#tool-versions)).
+    for `signer: sigstore-keyless`, `cosign-key`, or `kms`, `cosign` binaries
+    (see [Tool versions](#tool-versions)).
   - the Grype vulnerability database — downloaded at scan time.
   - the GitHub attestation API — only for `signer: github`.
   - GitHub's Actions OIDC endpoint and the public Sigstore Fulcio, Rekor,
     certificate-transparency, and TUF services — only for
     `signer: sigstore-keyless`.
+  - the selected KMS or Transit API endpoint — only for `signer: kms`.
 - **`GRYPE_DB_CACHE_DIR`:** Grype honors this environment variable to pre-seed
   the vulnerability database on locked-down or air-gapped runners. It is not an
   action input; set it as a step- or job-level `env:` value and it passes
@@ -314,7 +340,7 @@ Notes:
 - The metadata tarball is a subject of the provenance attestation only, never of
   the SBOM or validation attestations.
 - `attestation-url` points at the validation attestation for `signer: github`;
-  it is unset for `sigstore-keyless` and local `cosign-key` bundles.
+  it is unset for `sigstore-keyless`, `cosign-key`, and `kms` bundles.
 - `sigstore-keyless` bundles use the Sigstore bundle v0.3 media type, contain
   exactly one public transparency-log entry each, and self-verify against the
   exact `${GITHUB_SERVER_URL}/${GITHUB_WORKFLOW_REF}` certificate identity and
@@ -322,6 +348,9 @@ Notes:
 - `cosign-key` bundles use the Sigstore bundle v0.3 media type, contain no
   transparency-log entries, and are promoted only after all three signatures,
   subjects, and predicate types self-verify.
+- `kms` bundles have the same no-transparency contract and self-verify against a
+  temporary public-key export. Vault/OpenBao perform a second export after all
+  three signatures and reject a changed public-key fingerprint.
 - The validation predicate type is an opaque, versioned identifier and is not a
   live endpoint. Field-by-field definitions:
   [predicate/vm-image-validation-v1.md](predicate/vm-image-validation-v1.md).
@@ -553,6 +582,12 @@ Placeholders written as `<...>` are interpolated at runtime.
   — set the named secret environment variable on the action step.
 - `signer "cosign-key" requires the COSIGN_PASSWORD environment variable for the encrypted key.`
   — set the key's password as a secret environment variable on the action step.
+- `signer "kms" requires signing-key to be an immutable awskms, gcpkms, or azurekms key-version URI, or a hashivault/openbao Transit key URI.`
+  — use one of the exact forms in the [KMS URI allowlist](#kms-uri-allowlist).
+  The rejected locator is intentionally omitted from the diagnostic.
+- `signer "kms" with <provider> requires ambient <ADDR> and <TOKEN> environment variables.`
+  — establish the named Vault/OpenBao address and short-lived token before the
+  action runs.
 - `signer "sigstore-keyless" requires the job permission id-token: write; the GitHub Actions OIDC request environment is unavailable.`
   — the job did not grant OIDC permission, or the event is a fork pull request.
   The action detects this before downloading tools or reading the disk. Grant
@@ -684,7 +719,8 @@ disk-path error.
 
 Signing runs only on a passing result. `github` publishes remotely;
 `sigstore-keyless` creates local bundles with public Sigstore identity and
-transparency; `cosign-key` creates local, offline bundles.
+transparency; `cosign-key` and `kms` create local bundles with no public
+transparency entry.
 
 - `signer: github requires a GitHub token to push attestations to the GitHub attestation API. Provide the github-token input (it defaults to the job's ${{ github.token }} and must carry attestations: write), but it resolved empty.`
   — `github-token` resolved empty. Do not override it with an empty value; the
@@ -708,7 +744,7 @@ transparency; `cosign-key` creates local, offline bundles.
   earlier bundle set.
 - `Cosign produced an unexpected bundle media type.` /
   `Cosign bundle has invalid transparency-log metadata.` /
-  `Cosign unexpectedly published transparency-log material for signer "cosign-key".`
+  `Cosign unexpectedly published transparency-log material for signer "<cosign-key|kms>".`
   — Cosign's output violated the offline bundle contract. Nothing is promoted;
   retain logs and investigate the binary/configuration before retrying.
 - `Cosign keyless bundle is missing its required public transparency-log entry.`
@@ -719,10 +755,15 @@ transparency; `cosign-key` creates local, offline bundles.
   `Cosign bundle payload does not match the intended statement.` — the bundle
   was incomplete or did not carry the exact statement supplied by the action.
   Nothing is promoted.
-- `signer "kms" is not yet implemented. This release supports "none", "github", "sigstore-keyless", and "cosign-key"; the remaining external backend (kms) is a later extension point, and this action never falls back to a different backend.`
-  — `kms` was selected and reached (this throws only on a passing result; a
-  failing result skips signing). Remedy: use `none`, `github`,
-  `sigstore-keyless`, or `cosign-key`.
+- `signer "kms" detected a Vault/OpenBao public-key change during signing; no attestation bundles were published.`
+  — the Transit key changed between the pre-signing and post-signing exports.
+  Investigate rotation timing and retry only after pinning the intended public
+  key out of band.
+- `Command failed with exit code <n>: cosign <operation> [REDACTED]` — Cosign
+  could not fetch or use the key. KMS locator and provider stderr are withheld;
+  inspect the preceding provider-authentication step and provider audit log for
+  missing credentials, permission denial, unsupported key usage, or service
+  reachability.
 
 ### Evidence-complete failure
 

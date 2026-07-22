@@ -20,8 +20,8 @@ the operator task in [signing.md](signing.md).
 - The GitHub CLI (`gh`) with `gh attestation` support, authenticated with
   `gh auth login` or a `GH_TOKEN`. Commands here were tested with `gh` 2.94.0.
 - `jq` if you want to extract predicate JSON for a downstream policy engine.
-- For `sigstore-keyless` or `cosign-key` bundles, Cosign `v3.1.2`. Key-backed
-  verification also needs the signer's public key obtained through an
+- For `sigstore-keyless`, `cosign-key`, or `kms` bundles, Cosign `v3.1.2`.
+  Key-backed verification also needs the signer's public key obtained through an
   independently trusted channel.
 
 Throughout, `<owner>/<repo>` is the repository that **ran** `attest-vm-image`
@@ -94,30 +94,33 @@ signature and public-log inclusion, the predicate type, and the disk digest in
 the statement subject. A changed image, changed bundle, wrong workflow identity,
 or wrong issuer must fail.
 
-## Verify `cosign-key` bundles
+## Verify `cosign-key` and `kms` bundles
 
-Use this when the producer selected `signer: cosign-key`. These bundles are not
-published and deliberately contain no public transparency-log entry. Verify them
-against the independently trusted `cosign.pub` supplied by the signer.
+Use this when the producer selected `signer: cosign-key` or `signer: kms`. These
+bundles are not published and deliberately contain no public transparency-log
+entry. Verify them against the independently trusted public key supplied by the
+signer: `cosign.pub` for the encrypted-key example or `kms.pub` exported from
+the configured KMS key.
 
 ```bash
 hex="$(sha256sum disk.qcow2 | awk '{print $1}')"
+public_key=cosign.pub # Use kms.pub for signer: kms.
 
 cosign verify-blob-attestation \
   --bundle evidence/attestations/provenance.sigstore.json \
-  --key cosign.pub --insecure-ignore-tlog \
+  --key "$public_key" --insecure-ignore-tlog \
   --digest "$hex" --digestAlg sha256 \
   --type https://slsa.dev/provenance/v1
 
 cosign verify-blob-attestation \
   --bundle evidence/attestations/sbom.sigstore.json \
-  --key cosign.pub --insecure-ignore-tlog \
+  --key "$public_key" --insecure-ignore-tlog \
   --digest "$hex" --digestAlg sha256 \
   --type https://spdx.dev/Document/v2.3
 
 cosign verify-blob-attestation \
   --bundle evidence/attestations/validation.sigstore.json \
-  --key cosign.pub --insecure-ignore-tlog \
+  --key "$public_key" --insecure-ignore-tlog \
   --digest "$hex" --digestAlg sha256 \
   --type https://meigma.github.io/attest-vm-image/predicate/vm-image-validation/v1
 ```
@@ -127,9 +130,9 @@ use the version recorded in the bundle if it differs from `v2.3`.
 
 All three commands must exit `0`. `--insecure-ignore-tlog` disables only the
 transparency witness that this backend intentionally omits; Cosign still checks
-the signature against `cosign.pub`, the predicate type, and the disk digest in
-the statement subject. Treat a changed image, changed bundle, unexpected type,
-or different public key as a verification failure.
+the signature against the selected public key, the predicate type, and the disk
+digest in the statement subject. Treat a changed image, changed bundle,
+unexpected type, or different public key as a verification failure.
 
 ## Verify a published attestation online
 

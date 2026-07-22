@@ -1,7 +1,7 @@
 import type { Inputs } from '../inputs.js'
 import type { Signer } from './types.js'
 import { GithubSigner } from './github.js'
-import { CosignKeySigner, SigstoreKeylessSigner } from './cosign.js'
+import { CosignKeySigner, KmsSigner, SigstoreKeylessSigner } from './cosign.js'
 
 export type { SignArtifact, SignContext, SignResult, Signer } from './types.js'
 
@@ -21,12 +21,13 @@ export function selectSigner(inputs: Inputs): Signer | null {
       return new SigstoreKeylessSigner()
     case 'cosign-key':
       return new CosignKeySigner(inputs.signingKey as string)
-    default:
+    case 'kms':
+      return new KmsSigner(inputs.signingKey as string)
+    default: {
+      const exhaustive: never = inputs.signer
       throw new Error(
-        `signer "${inputs.signer}" is not yet implemented. This release supports ` +
-          '"none", "github", "sigstore-keyless", and "cosign-key"; the remaining ' +
-          'external backend (kms) is a later extension point, ' +
-          'and this action never falls back to a different backend.'
+        `internal error: unsupported signer "${String(exhaustive)}"`
       )
+    }
   }
 }

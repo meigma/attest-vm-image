@@ -38,7 +38,7 @@ jest.unstable_mockModule('@actions/attest', () => ({
 
 const { selectSigner } = await import('../src/sign/index.js')
 const { GithubSigner } = await import('../src/sign/github.js')
-const { CosignKeySigner, SigstoreKeylessSigner } =
+const { CosignKeySigner, KmsSigner, SigstoreKeylessSigner } =
   await import('../src/sign/cosign.js')
 
 // A minimal fake bundle/attestation the mocked library returns.
@@ -63,7 +63,14 @@ const inputsWith = (signer: SignerName): Inputs => ({
   failOnSeverity: 'high',
   signer,
   githubToken: FAKE_TOKEN,
-  ...(signer === 'cosign-key' ? { signingKey: 'cosign.key' } : {})
+  ...(signer === 'cosign-key'
+    ? { signingKey: 'cosign.key' }
+    : signer === 'kms'
+      ? {
+          signingKey:
+            'awskms:///arn:aws:kms:us-west-2:111122223333:key/1234abcd-12ab-34cd-56ef-1234567890ab'
+        }
+      : {})
 })
 
 const statement = {
@@ -99,23 +106,9 @@ describe('selectSigner', () => {
     delete process.env.GITHUB_WORKFLOW_REF
   })
 
-  it.each(['kms'] as const)(
-    'throws naming the requested backend for "%s" and never dispatches elsewhere',
-    (backend) => {
-      let thrown: unknown
-      try {
-        selectSigner(inputsWith(backend))
-      } catch (e) {
-        thrown = e
-      }
-      expect(thrown).toBeInstanceOf(Error)
-      // The diagnostic names the exact requested backend...
-      expect((thrown as Error).message).toContain(`signer "${backend}"`)
-      expect((thrown as Error).message).toMatch(/not yet implemented/)
-      // ...and states it never falls back to a different one.
-      expect((thrown as Error).message).toMatch(/never falls back/)
-    }
-  )
+  it('returns a KmsSigner for "kms"', () => {
+    expect(selectSigner(inputsWith('kms'))).toBeInstanceOf(KmsSigner)
+  })
 })
 
 describe('GithubSigner.sign', () => {
