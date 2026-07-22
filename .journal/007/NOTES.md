@@ -139,3 +139,36 @@ the intended named OIDC diagnostic when run without permission. Next: commit,
 run the complete committed-dist gate, publish the stacked PR, deliberately
 trigger its public smoke once, and inspect the hosted results before declaring
 Slice 2 complete.
+
+## 2026-07-22 07:50 — Slice 2 complete and ready for review
+
+Completed `sigstore-keyless` in focused stacked PR #23 at exact head
+`1ccf76859f2eca97234d49f84425dd533e32d1cf`, targeting the still-unmerged
+Slice 1 branch from PR #22. The PR contains one Slice 2 commit and is ready for
+review. The temporary main base was used only to obtain hosted checks, then the
+PR was retargeted after every check passed.
+
+Full local `moon run root:check` passed with 235 tests plus formatting, lint,
+audit, packaging, and committed-dist verification. Strict docs and Actionlint
+also passed. The Diátaxis pass kept procedure in the signing how-to, exact trust
+commands in verification, privacy rationale in explanation, and permissions,
+egress, outputs, and diagnostics in reference.
+
+Opt-in Keyless integration run `29929926329` passed at the exact head. The
+no-OIDC job passed in eight seconds, proving the packaged action names missing
+`id-token: write` before disk access. The OIDC-only job passed in 3m10 with no
+GitHub API write scope: it signed provenance, SBOM, and validation, required one
+public transparency entry per bundle, left URL fields unset, and independently
+verified exact certificate identity
+`https://github.com/meigma/attest-vm-image/.github/workflows/keyless-integration.yml@refs/pull/23/merge`
+plus issuer `https://token.actions.githubusercontent.com`; wrong identity and
+issuer both failed. The hosted notice also surfaced the permanent public
+repository/workflow/ref/commit/run disclosure. This deliberate smoke created
+three permanent public Sigstore entries.
+
+Ordinary hosted run `29929912925` also passed the unchanged GitHub signer,
+encrypted Cosign-key signer, unsigned/failure cases, and tamper/digest negative
+checks. CI, GitHub Pages, and Kusari Inspector passed. The
+`integration:keyless` label was removed after the proof, so no later branch
+push can accidentally repeat the public publication. Slice 2 is complete;
+`kms` remains Slice 3.
