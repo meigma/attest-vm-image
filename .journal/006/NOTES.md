@@ -61,3 +61,20 @@ manifest (#20)`).
 Fast-forwarded the clean local `main` checkout to the merge commit. Removed the
 integrated `feat/evidence-manifest` Worktrunk worktree and local branch, then
 deleted the remote feature branch. Session 006 remains open for any follow-up.
+
+## 2026-07-21 19:53 — Released v1.1.0
+Merged Release Please PR #21 at exact reviewed head
+`cebb4b94bebf28db9fcce2c24d395b51757bfa60`, producing release commit
+`2646b5c7b0afc58f20a821ab44a5d0780733bd79`. The generated release delta only
+bumped the manifest/package versions to 1.1.0 and added the evidence-manifest
+feature to the changelog.
+
+Release Please created `v1.1.0` as a draft. Published it only after CI, GitHub
+Pages, unsigned integration, signed integration, and the expected failure-path
+checks passed on the exact tagged commit. The public release is:
+https://github.com/meigma/attest-vm-image/releases/tag/v1.1.0.
+
+The Major Version Tag workflow passed and moved `v1` to the same commit as
+`v1.1.0` and `main`. Fast-forwarded the clean local `main` checkout and updated
+the local moving `v1` tag explicitly; package version 1.1.0 and the new Action
+output are present at `v1`.
