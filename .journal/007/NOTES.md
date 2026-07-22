@@ -66,3 +66,29 @@ After checkpointing the report, deleted remote branch
 `feat/phase-0-signing-probe`, its Worktrunk checkout, and its local branch. Main
 remains clean at `2646b5c`; the successful hosted run and permanent Rekor entry
 remain as the report's evidence.
+
+## 2026-07-22 07:15 — Slice 1 implementation ready for hosted verification
+
+Implemented the approved `cosign-key` vertical slice on
+`feat/cosign-key-signing`. The action now lazily acquires digest-pinned Cosign
+v3.1.2 binaries for Linux x64/arm64, accepts readable encrypted key files or
+`env://NAME`, masks key/password secrets, rejects raw or contradictory key
+inputs, and redacts secret-bearing command labels and errors.
+
+The shared external statement builder preserves the three stable roles and
+uses the environment-only GitHub Actions SLSA v1 predicate proved in Phase 0.
+The key signer creates an explicit no-Fulcio/no-OIDC/no-Rekor/no-TSA config,
+signs complete statements, rejects any transparency-log entry or payload drift,
+self-verifies each bundle, and atomically promotes the set only after all three
+pass. GitHub signing behavior is unchanged; local external signing leaves URL
+fields unset.
+
+Added focused unit coverage, an unprivileged hosted integration using a
+generated encrypted key with positive and tamper/digest-negative verification,
+operator and verifier documentation, and refreshed committed `dist/`. Current
+local evidence: 229 tests pass, strict docs build passes, lint/format/audit pass,
+and repeated packaging produced identical bundle hashes. The full pre-commit
+`root:check` reaches only the expected `check-dist` failure because intentional
+`dist/` changes differ from `HEAD`; rerun the full gate after the implementation
+commit, then push and verify the real hosted integration before considering the
+slice complete.
