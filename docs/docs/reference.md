@@ -305,9 +305,9 @@ Contract:
 | `vulnerability-report`   | `application/json`                                          | Every completed run                 |
 | `validation-report`      | `application/json`                                          | Every completed run                 |
 | `validation-predicate`   | `application/vnd.in-toto+json`                              | Every completed run                 |
-| `provenance-attestation` | `application/vnd.dev.sigstore.bundle+json`                  | Passing run with successful signing |
-| `sbom-attestation`       | `application/vnd.dev.sigstore.bundle+json`                  | Passing run with successful signing |
-| `validation-attestation` | `application/vnd.dev.sigstore.bundle+json`                  | Passing run with successful signing |
+| `provenance-attestation` | `application/vnd.dev.sigstore.bundle.v0.3+json`             | Passing run with successful signing |
+| `sbom-attestation`       | `application/vnd.dev.sigstore.bundle.v0.3+json`             | Passing run with successful signing |
+| `validation-attestation` | `application/vnd.dev.sigstore.bundle.v0.3+json`             | Passing run with successful signing |
 
 Paths use the same conventions as the rest of the action: input artifact paths
 are recorded as supplied, and generated evidence paths are the paths written

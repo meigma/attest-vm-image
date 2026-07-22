@@ -104,6 +104,12 @@ jobs:
           test -z '${{ steps.keyless.outputs.attestation-url }}'
           jq -e 'has("attestationUrl") | not' \
             evidence-keyless/evidence-manifest.json >/dev/null
+          jq -e '[.evidence[].role] == [
+            "checksums", "sbom", "vulnerability-report",
+            "validation-report", "validation-predicate",
+            "provenance-attestation", "sbom-attestation",
+            "validation-attestation"
+          ]' evidence-keyless/evidence-manifest.json >/dev/null
 
           verify() {
             bundle="$1"

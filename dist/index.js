@@ -83742,7 +83742,7 @@ const EVIDENCE_MEDIA_TYPES = {
     cyclonedx: 'application/vnd.cyclonedx+json',
     json: 'application/json',
     inToto: 'application/vnd.in-toto+json',
-    sigstoreBundle: 'application/vnd.dev.sigstore.bundle+json'
+    sigstoreBundle: 'application/vnd.dev.sigstore.bundle.v0.3+json'
 };
 /**
  * Hash each explicitly supplied evidence file and write a deterministic,
