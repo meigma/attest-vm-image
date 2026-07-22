@@ -49,6 +49,14 @@ const FAIL_ON_SEVERITIES: readonly FailOnSeverity[] = [
 // `sigstore-keyless` derive their identity from workflow OIDC and need none.
 const KEY_REFERENCE_BACKENDS: readonly Signer[] = ['cosign-key', 'kms']
 const ENV_KEY_REFERENCE = /^env:\/\/([A-Za-z_][A-Za-z0-9_]*)$/
+const KMS_KEY_REFERENCES = {
+  aws: /^awskms:\/\/\/arn:(?:aws|aws-us-gov|aws-cn):kms:[a-z0-9-]+:[0-9]{12}:key\/(?:mrk-)?[A-Fa-f0-9]{8}-?[A-Fa-f0-9]{4}-?[A-Fa-f0-9]{4}-?[A-Fa-f0-9]{4}-?[A-Fa-f0-9]{12}$/,
+  gcp: /^gcpkms:\/\/projects\/[^/]+\/locations\/[^/]+\/keyRings\/[^/]+\/cryptoKeys\/[^/]+\/versions\/[1-9][0-9]*$/,
+  azure:
+    /^azurekms:\/\/[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?\.vault\.azure\.net\/[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?\/[A-Za-z0-9]+$/,
+  vault: /^hashivault:\/\/[A-Za-z0-9_](?:[A-Za-z0-9_.-]*[A-Za-z0-9_])?$/,
+  openbao: /^openbao:\/\/[A-Za-z0-9_](?:[A-Za-z0-9_.-]*[A-Za-z0-9_])?$/
+} as const
 
 /**
  * Read `@actions/core` inputs, apply defaults, and validate them into a typed
@@ -144,6 +152,25 @@ export function parseInputs(): Inputs {
     }
     core.setSecret(password)
   }
+  if (signer === 'kms' && signingKey) {
+    const provider = Object.entries(KMS_KEY_REFERENCES).find(([, pattern]) =>
+      pattern.test(signingKey)
+    )?.[0]
+    if (!provider) {
+      throw new Error(
+        'signer "kms" requires signing-key to be an immutable awskms, gcpkms, or azurekms key-version URI, or a hashivault/openbao Transit key URI.'
+      )
+    }
+    // KMS locators are not credentials, but may disclose account, project,
+    // vault, and key names. Mask the exact value as a defense in depth.
+    core.setSecret(signingKey)
+
+    if (provider === 'vault') {
+      assertTransitEnvironment('hashivault', 'VAULT_ADDR', 'VAULT_TOKEN')
+    } else if (provider === 'openbao') {
+      assertTransitEnvironment('openbao', 'BAO_ADDR', 'BAO_TOKEN')
+    }
+  }
   if (signer === 'sigstore-keyless') {
     const oidcRequestUrl = process.env.ACTIONS_ID_TOKEN_REQUEST_URL
     const oidcRequestToken = process.env.ACTIONS_ID_TOKEN_REQUEST_TOKEN
@@ -178,4 +205,17 @@ export function parseInputs(): Inputs {
     signingKey,
     githubToken: core.getInput('github-token')
   }
+}
+
+function assertTransitEnvironment(
+  provider: 'hashivault' | 'openbao',
+  addressName: 'VAULT_ADDR' | 'BAO_ADDR',
+  tokenName: 'VAULT_TOKEN' | 'BAO_TOKEN'
+): void {
+  if (!process.env[addressName] || !process.env[tokenName]) {
+    throw new Error(
+      `signer "kms" with ${provider} requires ambient ${addressName} and ${tokenName} environment variables.`
+    )
+  }
+  core.setSecret(process.env[tokenName])
 }

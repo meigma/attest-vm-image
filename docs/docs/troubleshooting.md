@@ -136,12 +136,12 @@ is slow.
 ### Problem: tool or database downloads fail
 
 The action needs outbound access to download the pinned `syft` and `grype`
-binaries, plus `cosign` when `signer: sigstore-keyless` or `cosign-key` is
-selected, from `github.com` release assets and to fetch the Grype vulnerability
-database at scan time. Keyless signing also needs GitHub OIDC and the public
-Sigstore services. Symptoms are an integrity or download error while fetching a
-binary, a Grype scan error, or a signing-service failure — see the corresponding
-entries in [Failure modes](reference.md#failure-modes).
+binaries, plus `cosign` when `signer: sigstore-keyless`, `cosign-key`, or `kms`
+is selected, from `github.com` release assets and to fetch the Grype
+vulnerability database at scan time. Keyless signing also needs GitHub OIDC and
+the public Sigstore services. Symptoms are an integrity or download error while
+fetching a binary, a Grype scan error, or a signing-service failure — see the
+corresponding entries in [Failure modes](reference.md#failure-modes).
 
 **Solution:** Allow egress to the endpoints listed under
 [Requirements](reference.md#requirements). On locked-down or air-gapped runners,
@@ -187,18 +187,19 @@ signing only on a trusted same-repository event. Do not grant
 `attestations: write`; keyless signing does not use the GitHub attestation API.
 See [Sign with public Sigstore keyless identity](signing.md).
 
-### Problem: an unimplemented signer throws only on a passing image
+### Problem: `signer: kms` cannot fetch or use the key
 
-`kms` passes its initial input validation but throws when the signing step is
-reached. Signing runs only on a passing result, so the same workflow
-configuration fails differently depending on the image: on a failing image it
-fails with the ordinary evidence-complete-failure message (signing is skipped,
-so no signer-related error appears); on a passing image the signer is actually
-reached and throws the "not yet implemented" diagnostic instead.
+KMS input validation checks the provider and immutable/versioned locator shape,
+but provider authentication and key capabilities are checked by the live API. A
+redacted Cosign command failure usually means the preceding authentication step
+did not establish ambient credentials, the principal lacks public-key or signing
+permission, or the selected key cannot sign.
 
-**Solution:** Use `signer: none`, `signer: github`, `signer: sigstore-keyless`,
-or `signer: cosign-key`. See the signer entry in
-[Failure modes](reference.md#failure-modes).
+**Solution:** Check the provider authentication step and audit log. Confirm the
+principal is limited to the exact key but can fetch its public key and sign, and
+confirm the key is asymmetric and signing-capable. Vault/OpenBao additionally
+require their named address and token environment variables. See
+[Sign with a KMS or Transit key](signing.md#sign-with-a-kms-or-transit-key).
 
 ### Problem: signing failed but the evidence looks complete
 

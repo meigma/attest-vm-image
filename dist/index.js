@@ -30261,6 +30261,13 @@ const FAIL_ON_SEVERITIES = [
 // `sigstore-keyless` derive their identity from workflow OIDC and need none.
 const KEY_REFERENCE_BACKENDS = ['cosign-key', 'kms'];
 const ENV_KEY_REFERENCE = /^env:\/\/([A-Za-z_][A-Za-z0-9_]*)$/;
+const KMS_KEY_REFERENCES = {
+    aws: /^awskms:\/\/\/arn:(?:aws|aws-us-gov|aws-cn):kms:[a-z0-9-]+:[0-9]{12}:key\/(?:mrk-)?[A-Fa-f0-9]{8}-?[A-Fa-f0-9]{4}-?[A-Fa-f0-9]{4}-?[A-Fa-f0-9]{4}-?[A-Fa-f0-9]{12}$/,
+    gcp: /^gcpkms:\/\/projects\/[^/]+\/locations\/[^/]+\/keyRings\/[^/]+\/cryptoKeys\/[^/]+\/versions\/[1-9][0-9]*$/,
+    azure: /^azurekms:\/\/[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?\.vault\.azure\.net\/[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?\/[A-Za-z0-9]+$/,
+    vault: /^hashivault:\/\/[A-Za-z0-9_](?:[A-Za-z0-9_.-]*[A-Za-z0-9_])?$/,
+    openbao: /^openbao:\/\/[A-Za-z0-9_](?:[A-Za-z0-9_.-]*[A-Za-z0-9_])?$/
+};
 /**
  * Read `@actions/core` inputs, apply defaults, and validate them into a typed
  * `Inputs` object. Throws an `Error` with a specific, distinct message on the
@@ -30325,6 +30332,21 @@ function parseInputs() {
         }
         setSecret(password);
     }
+    if (signer === 'kms' && signingKey) {
+        const provider = Object.entries(KMS_KEY_REFERENCES).find(([, pattern]) => pattern.test(signingKey))?.[0];
+        if (!provider) {
+            throw new Error('signer "kms" requires signing-key to be an immutable awskms, gcpkms, or azurekms key-version URI, or a hashivault/openbao Transit key URI.');
+        }
+        // KMS locators are not credentials, but may disclose account, project,
+        // vault, and key names. Mask the exact value as a defense in depth.
+        setSecret(signingKey);
+        if (provider === 'vault') {
+            assertTransitEnvironment('hashivault', 'VAULT_ADDR', 'VAULT_TOKEN');
+        }
+        else if (provider === 'openbao') {
+            assertTransitEnvironment('openbao', 'BAO_ADDR', 'BAO_TOKEN');
+        }
+    }
     if (signer === 'sigstore-keyless') {
         const oidcRequestUrl = process.env.ACTIONS_ID_TOKEN_REQUEST_URL;
         const oidcRequestToken = process.env.ACTIONS_ID_TOKEN_REQUEST_TOKEN;
@@ -30354,6 +30376,12 @@ function parseInputs() {
         signingKey,
         githubToken: getInput('github-token')
     };
+}
+function assertTransitEnvironment(provider, addressName, tokenName) {
+    if (!process.env[addressName] || !process.env[tokenName]) {
+        throw new Error(`signer "kms" with ${provider} requires ambient ${addressName} and ${tokenName} environment variables.`);
+    }
+    setSecret(process.env[tokenName]);
 }
 
 /**
@@ -83467,6 +83495,21 @@ class SigstoreKeylessSigner {
         return this.signer.sign(ctx);
     }
 }
+/** KMS-backed signing with ambient provider credentials and no public services. */
+class KmsSigner {
+    signer;
+    constructor(keyReference) {
+        this.signer = new CosignSigner({
+            kind: 'kms',
+            keyReference,
+            fingerprintGuard: keyReference.startsWith('hashivault://') ||
+                keyReference.startsWith('openbao://')
+        });
+    }
+    sign(ctx) {
+        return this.signer.sign(ctx);
+    }
+}
 class CosignSigner {
     configuration;
     constructor(configuration) {
@@ -83491,7 +83534,7 @@ class CosignSigner {
                 throw new Error(`attestation bundle directory "${finalBundleDir}" already exists; refusing to overwrite it.`);
             }, () => undefined);
             await fs$1.promises.mkdir(stagingBundleDir);
-            const keyMaterial = this.configuration.kind === 'key'
+            const keyMaterial = this.configuration.kind !== 'keyless'
                 ? await this.prepareKeyMaterial(cosign, stagingRoot)
                 : undefined;
             for (const item of statements) {
@@ -83503,6 +83546,13 @@ class CosignSigner {
                     stagingRoot,
                     stagingBundleDir
                 });
+            }
+            if (this.configuration.kind === 'kms' &&
+                this.configuration.fingerprintGuard) {
+                if (!keyMaterial) {
+                    throw new Error('internal error: KMS key material is missing');
+                }
+                await this.assertKmsPublicKeyUnchanged(cosign, stagingRoot, keyMaterial.publicKeyPath);
             }
             await fs$1.promises.rename(stagingBundleDir, finalBundleDir);
             return {
@@ -83518,7 +83568,7 @@ class CosignSigner {
         }
     }
     async prepareKeyMaterial(cosign, stagingRoot) {
-        if (this.configuration.kind !== 'key') {
+        if (this.configuration.kind === 'keyless') {
             throw new Error('internal error: key material requested for keyless signing');
         }
         const configPath = path$2.join(stagingRoot, 'signing-config.json');
@@ -83549,15 +83599,39 @@ class CosignSigner {
         });
         return { configPath, publicKeyPath };
     }
+    async assertKmsPublicKeyUnchanged(cosign, stagingRoot, beforePath) {
+        if (this.configuration.kind !== 'kms') {
+            throw new Error('internal error: KMS fingerprint guard used by non-KMS signer');
+        }
+        const afterPath = path$2.join(stagingRoot, 'cosign-after.pub');
+        await exec(cosign, [
+            'public-key',
+            '--key',
+            this.configuration.keyReference,
+            '--outfile',
+            afterPath
+        ], {
+            displayLabel: 'cosign public-key --key [REDACTED] (rotation check)',
+            silent: true,
+            redactStderr: true
+        });
+        const [before, after] = await Promise.all([
+            publicKeyFingerprint(beforePath),
+            publicKeyFingerprint(afterPath)
+        ]);
+        if (before !== after) {
+            throw new Error('signer "kms" detected a Vault/OpenBao public-key change during signing; no attestation bundles were published.');
+        }
+    }
     async signAndVerify(options) {
         const { cosign, ctx, item, keyMaterial } = options;
         const statementPath = path$2.join(options.stagingRoot, `${item.role}.json`);
         const bundlePath = path$2.join(options.stagingBundleDir, item.filename);
         await fs$1.promises.writeFile(statementPath, JSON.stringify(item.statement, null, 2));
         const signArgs = ['attest-blob', '--statement', statementPath];
-        if (this.configuration.kind === 'key') {
+        if (this.configuration.kind !== 'keyless') {
             if (!keyMaterial) {
-                throw new Error('internal error: encrypted-key signing material is missing');
+                throw new Error('internal error: key-backed signing material is missing');
             }
             signArgs.push('--key', this.configuration.keyReference, '--signing-config', keyMaterial.configPath);
         }
@@ -83566,17 +83640,17 @@ class CosignSigner {
         }
         signArgs.push('--bundle', bundlePath, '--yes');
         await exec(cosign, signArgs, {
-            displayLabel: this.configuration.kind === 'key'
-                ? `cosign attest-blob (${item.role}, key [REDACTED])`
+            displayLabel: this.configuration.kind !== 'keyless'
+                ? `cosign attest-blob (${item.role}, ${this.configuration.kind} key [REDACTED])`
                 : `cosign attest-blob (${item.role}, GitHub Actions OIDC)`,
             silent: true,
-            redactStderr: this.configuration.kind === 'key'
+            redactStderr: this.configuration.kind !== 'keyless'
         });
         await assertBundle(bundlePath, item.statement, this.configuration.kind);
         const verifyArgs = ['verify-blob-attestation', '--bundle', bundlePath];
-        if (this.configuration.kind === 'key') {
+        if (this.configuration.kind !== 'keyless') {
             if (!keyMaterial) {
-                throw new Error('internal error: encrypted-key verification material is missing');
+                throw new Error('internal error: key-backed verification material is missing');
             }
             verifyArgs.push('--key', keyMaterial.publicKeyPath, '--insecure-ignore-tlog');
         }
@@ -83589,6 +83663,10 @@ class CosignSigner {
             silent: true
         });
     }
+}
+async function publicKeyFingerprint(publicKeyPath) {
+    const publicKey = await fs$1.promises.readFile(publicKeyPath);
+    return createHash('sha256').update(publicKey).digest('hex');
 }
 function keylessCertificateIdentity() {
     const serverUrl = process.env.GITHUB_SERVER_URL;
@@ -83621,7 +83699,7 @@ async function assertBundle(bundlePath, intendedStatement, signerKind) {
         throw new Error('Cosign bundle has invalid transparency-log metadata.');
     }
     else if (Array.isArray(tlogEntries) && tlogEntries.length !== 0) {
-        throw new Error('Cosign unexpectedly published transparency-log material for signer "cosign-key".');
+        throw new Error(`Cosign unexpectedly published transparency-log material for signer "${signerKind === 'kms' ? 'kms' : 'cosign-key'}".`);
     }
     if (typeof bundle.dsseEnvelope?.payload !== 'string') {
         throw new Error('Cosign bundle is missing its DSSE payload.');
@@ -83648,11 +83726,12 @@ function selectSigner(inputs) {
             return new SigstoreKeylessSigner();
         case 'cosign-key':
             return new CosignKeySigner(inputs.signingKey);
-        default:
-            throw new Error(`signer "${inputs.signer}" is not yet implemented. This release supports ` +
-                '"none", "github", "sigstore-keyless", and "cosign-key"; the remaining ' +
-                'external backend (kms) is a later extension point, ' +
-                'and this action never falls back to a different backend.');
+        case 'kms':
+            return new KmsSigner(inputs.signingKey);
+        default: {
+            const exhaustive = inputs.signer;
+            throw new Error(`internal error: unsupported signer "${String(exhaustive)}"`);
+        }
     }
 }
 

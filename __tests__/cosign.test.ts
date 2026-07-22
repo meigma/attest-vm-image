@@ -24,7 +24,7 @@ jest.unstable_mockModule('../src/exec.js', () => ({ exec }))
 jest.unstable_mockModule('../src/tools.js', () => ({ ensureBinary }))
 jest.unstable_mockModule('@actions/core', () => core)
 
-const { CosignKeySigner, SigstoreKeylessSigner } =
+const { CosignKeySigner, KmsSigner, SigstoreKeylessSigner } =
   await import('../src/sign/cosign.js')
 
 const DISK_SHA = 'a'.repeat(64)
@@ -218,6 +218,110 @@ describe('CosignKeySigner', () => {
       new CosignKeySigner('/secret/cosign.key').sign(context())
     ).rejects.toThrow(/unexpectedly published transparency-log material/)
     expect(existsSync(join(dir, 'attestations'))).toBe(false)
+  })
+
+  it('signs and verifies three KMS bundles without a key password', async () => {
+    delete process.env.COSIGN_PASSWORD
+    const keyReference =
+      'awskms:///arn:aws:kms:us-west-2:111122223333:key/1234abcd-12ab-34cd-56ef-1234567890ab'
+
+    const result = await new KmsSigner(keyReference).sign(context())
+
+    expect(result.bundles).toHaveLength(3)
+    expect(result.attestationUrl).toBeUndefined()
+    expect(
+      exec.mock.calls.filter(([, args]) => args?.[0] === 'public-key')
+    ).toHaveLength(1)
+    const keyCalls = exec.mock.calls.filter(([, args]) =>
+      args?.includes(keyReference)
+    )
+    expect(keyCalls).toHaveLength(4)
+    for (const [, , opts] of keyCalls) {
+      expect(opts).toEqual(
+        expect.objectContaining({
+          displayLabel: expect.stringContaining('[REDACTED]'),
+          silent: true,
+          redactStderr: true
+        })
+      )
+      expect(JSON.stringify(opts)).not.toContain(keyReference)
+    }
+    for (const [, args] of exec.mock.calls.filter(
+      ([, args]) => args?.[0] === 'attest-blob'
+    )) {
+      expect(args).toEqual(
+        expect.arrayContaining(['--key', keyReference, '--signing-config'])
+      )
+    }
+  })
+
+  it('fails a KMS authentication error without signing or fallback', async () => {
+    const successful = exec.getMockImplementation()
+    exec.mockImplementation(async (cmd, args = [], opts) => {
+      if (args[0] === 'public-key') {
+        throw new Error(
+          'Command failed with exit code 1: cosign public-key [REDACTED]'
+        )
+      }
+      return successful
+        ? successful(cmd, args, opts)
+        : { stdout: '', stderr: '', exitCode: 0 }
+    })
+
+    await expect(
+      new KmsSigner(
+        'awskms:///arn:aws:kms:us-west-2:111122223333:key/1234abcd-12ab-34cd-56ef-1234567890ab'
+      ).sign(context())
+    ).rejects.toThrow('[REDACTED]')
+    expect(
+      exec.mock.calls.filter(([, args]) => args?.[0] === 'attest-blob')
+    ).toHaveLength(0)
+    expect(existsSync(join(dir, 'attestations'))).toBe(false)
+  })
+
+  it('rejects transparency material in a KMS bundle by backend name', async () => {
+    installSuccessfulExecMock([{ logIndex: '1' }])
+
+    await expect(
+      new KmsSigner(
+        'awskms:///arn:aws:kms:us-west-2:111122223333:key/1234abcd-12ab-34cd-56ef-1234567890ab'
+      ).sign(context())
+    ).rejects.toThrow(/signer "kms"/)
+    expect(existsSync(join(dir, 'attestations'))).toBe(false)
+  })
+
+  it.each(['hashivault://cosign', 'openbao://cosign'])(
+    'checks the public-key fingerprint before and after signing for %s',
+    async (keyReference) => {
+      const result = await new KmsSigner(keyReference).sign(context())
+
+      expect(result.bundles).toHaveLength(3)
+      expect(
+        exec.mock.calls.filter(([, args]) => args?.[0] === 'public-key')
+      ).toHaveLength(2)
+    }
+  )
+
+  it('rejects a Vault rotation and publishes no bundles', async () => {
+    let publicKeyReads = 0
+    const successful = exec.getMockImplementation()
+    exec.mockImplementation(async (cmd, args = [], opts) => {
+      const result = successful
+        ? await successful(cmd, args, opts)
+        : { stdout: '', stderr: '', exitCode: 0 }
+      if (args[0] === 'public-key' && ++publicKeyReads === 2) {
+        writeFileSync(flag(args, '--outfile'), 'ROTATED PUBLIC KEY')
+      }
+      return result
+    })
+
+    await expect(
+      new KmsSigner('hashivault://cosign').sign(context())
+    ).rejects.toThrow(/public-key change during signing/)
+    expect(existsSync(join(dir, 'attestations'))).toBe(false)
+    expect(
+      readdirSync(dir).some((name) => name.startsWith('.attestations-'))
+    ).toBe(false)
   })
 
   it('signs and verifies three keyless bundles with exact identity and issuer', async () => {
