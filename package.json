@@ -1,7 +1,7 @@
 {
   "name": "attest-vm-image",
   "description": "GitHub Action that inspects a finished QCOW2 VM image and produces signed SBOM, vulnerability, contamination, and validation-predicate evidence",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "author": "Meigma",
   "type": "module",
   "private": true,
