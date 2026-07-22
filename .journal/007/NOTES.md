@@ -338,3 +338,27 @@ for deletion with AWS's minimum seven-day window on 2026-07-29. The pre-existing
 OIDC provider was left unchanged. Slice 4 docs commit `17890e7` records the
 narrow status correction after strict docs and the full 262-test gate passed;
 PRs #24 and #25 now carry the exact canary and cleanup evidence.
+
+## 2026-07-22 09:43 — Live KMS harness removed from the review stack
+
+The user chose not to retain an account-dependent KMS workflow or Bash harness
+because no reliable cloud account is available for recurring CI. Removed
+`.github/workflows/kms-integration.yml` in Slice 3 commit `20dd71e`, so PR #24
+does not introduce the disposable canary surface. The shared
+`.github/scripts/make-test-image.sh` remains because the ordinary and keyless
+integration workflows use it. Production KMS support and all account-free unit,
+mock, and validation-failure coverage remain unchanged.
+
+Restacked Slice 4 on the cleaned KMS head and force-pushed exact head
+`893e351561bba2a2ba55a46e1b7b3fcde0ddbc51`. Its three commits are `7fb6421`,
+`90e3132`, and `893e351`. The production `src/`, `dist/`, action metadata, and
+package files are byte-identical to field-tested action commit `ef96979`; the
+stack change relative to the previously reviewed final tree is only deletion of
+the persistent KMS workflow.
+
+Actionlint and `moon run root:check` passed after cleanup: 254 tests on Slice 3
+and 262 tests on Slice 4. PR #24 and PR #25 now describe run `29938031012` as a
+one-time disposable acceptance proof, explicitly avoid a recurring cloud-CI
+promise, and retain this report as historical evidence. Future live provider
+revalidation will be a fresh disposable exercise when a suitable account is
+available.

@@ -71,3 +71,16 @@ remain supported by URI contract but not yet field-tested.
 - Preserved the account's pre-existing GitHub OIDC provider unchanged.
 - Moved the local temporary clone, downloaded artifact, trust anchor, and policy
   files to Trash after the journal checkpoint.
+
+## Retention decision
+
+The disposable live-AWS workflow was used only to produce this acceptance
+evidence. It is not retained in the product repository, and there is no
+long-lived Bash harness or account-dependent KMS CI job. The repository keeps
+the production KMS implementation plus account-free unit, mock, and
+integration-negative coverage.
+
+Because no reliable AWS account is available for recurring CI, any future live
+revalidation is intentionally a fresh disposable exercise. This report remains
+the durable record of the 2026-07-22 proof; it is not a promise of continuous
+cloud-provider testing.
