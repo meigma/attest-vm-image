@@ -172,3 +172,34 @@ checks. CI, GitHub Pages, and Kusari Inspector passed. The
 `integration:keyless` label was removed after the proof, so no later branch
 push can accidentally repeat the public publication. Slice 2 is complete;
 `kms` remains Slice 3.
+
+## 2026-07-22 08:26 — Slice 3 ready for packaged commit
+
+Started `feat/kms-signing` as the third focused stack on the exact green Slice 2
+head; PRs #22 and #23 remain unmodified and unmerged. Implemented KMS dispatch
+through the shared Cosign engine for immutable AWS KMS ARNs, explicit Google
+Cloud KMS and Azure key versions, and HashiCorp Vault/OpenBao Transit keys.
+
+The action consumes ambient provider credentials only, masks KMS locators,
+redacts locator-bearing Cosign labels and stderr, creates the existing
+no-Fulcio/no-OIDC/no-Rekor/no-TSA configuration, exports a temporary public key,
+self-verifies all three bundles, and promotes them atomically. Vault/OpenBao get
+a second public-key export after all signatures; a changed fingerprint aborts
+without exposing bundles. Input validation rejects aliases, unversioned cloud
+keys, custom AWS endpoints, unsupported schemes, and missing Transit address or
+token environment before disk access.
+
+Added provider dispatch, invalid URI, redaction, missing-auth/no-fallback,
+no-transparency, and rotation tests; 254 tests pass. Formatting, lint,
+Actionlint, strict docs, audit, packaging, and every full gate except the
+expected pre-commit committed-dist comparison pass. The committed action bundle
+is refreshed. A main-only manual AWS canary is included behind a protected
+`kms-integration` environment and full-SHA-pinned OIDC auth action.
+
+No repository/environment KMS role, key ARN, region, or local AWS credentials
+exist, so the real non-exportable-key exit gate cannot run yet without external
+AWS provisioning that the approved proposal explicitly excluded. Documentation
+labels all five providers as URI-contract supported with live field testing
+pending. Next: commit, rerun `moon run root:check`, publish a draft stacked PR,
+verify ordinary hosted checks, and leave the exact AWS canary prerequisite
+visible rather than claiming the slice was field-tested.
