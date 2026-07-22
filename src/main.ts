@@ -231,14 +231,18 @@ export async function run(): Promise<void> {
           : {})
       },
       evidence,
-      ...(signResult ? { attestationUrl: signResult.attestationUrl } : {})
+      ...(signResult?.attestationUrl
+        ? { attestationUrl: signResult.attestationUrl }
+        : {})
     })
 
     // Set outputs only after the full handoff has been written. Attestation
     // outputs are set only when a signer completed on a passing result.
     if (signResult) {
       core.setOutput('attestation-bundle-path', signResult.bundleDir)
-      core.setOutput('attestation-url', signResult.attestationUrl)
+      if (signResult.attestationUrl) {
+        core.setOutput('attestation-url', signResult.attestationUrl)
+      }
     }
     core.setOutput('disk-digest', `sha256:${disk.sha256}`)
     core.setOutput('checksums-path', checksumsPath)

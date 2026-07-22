@@ -31,6 +31,8 @@ describe('inputs.ts', () => {
 
   afterEach(() => {
     jest.resetAllMocks()
+    delete process.env.COSIGN_PASSWORD
+    delete process.env.COSIGN_PRIVATE_KEY
   })
 
   it('applies defaults when only disk-path is provided', () => {
@@ -128,6 +130,7 @@ describe('inputs.ts', () => {
   })
 
   it('accepts a cosign-key backend when a signing-key is given', () => {
+    process.env.COSIGN_PASSWORD = 'password'
     withInputs({
       'disk-path': 'disk.qcow2',
       signer: 'cosign-key',
@@ -138,6 +141,95 @@ describe('inputs.ts', () => {
 
     expect(inputs.signer).toBe('cosign-key')
     expect(inputs.signingKey).toBe('cosign.key')
+    expect(core.setSecret).toHaveBeenCalledWith('password')
+  })
+
+  it('accepts env://NAME, validates the variable, and masks both secrets', () => {
+    process.env.COSIGN_PASSWORD = 'password'
+    process.env.COSIGN_PRIVATE_KEY = 'encrypted-private-key'
+    withInputs({
+      'disk-path': 'disk.qcow2',
+      signer: 'cosign-key',
+      'signing-key': 'env://COSIGN_PRIVATE_KEY'
+    })
+
+    expect(parseInputs().signingKey).toBe('env://COSIGN_PRIVATE_KEY')
+    expect(core.setSecret).toHaveBeenCalledWith('encrypted-private-key')
+    expect(core.setSecret).toHaveBeenCalledWith('password')
+  })
+
+  it('rejects an unset env:// key reference', () => {
+    process.env.COSIGN_PASSWORD = 'password'
+    withInputs({
+      'disk-path': 'disk.qcow2',
+      signer: 'cosign-key',
+      'signing-key': 'env://MISSING_KEY'
+    })
+
+    expect(() => parseInputs()).toThrow(/MISSING_KEY.*unset or empty/)
+  })
+
+  it('rejects malformed env references and unsupported URI schemes', () => {
+    process.env.COSIGN_PASSWORD = 'password'
+    for (const signingKey of ['env://BAD-NAME', 'awskms:///key']) {
+      withInputs({
+        'disk-path': 'disk.qcow2',
+        signer: 'cosign-key',
+        'signing-key': signingKey
+      })
+      expect(() => parseInputs()).toThrow(
+        /readable encrypted key file or env:\/\/NAME/
+      )
+    }
+  })
+
+  it('rejects unreadable key files without echoing the path', () => {
+    process.env.COSIGN_PASSWORD = 'password'
+    accessSync.mockImplementation(() => {
+      throw new Error('EACCES')
+    })
+    withInputs({
+      'disk-path': 'disk.qcow2',
+      signer: 'cosign-key',
+      'signing-key': '/secret/cosign.key'
+    })
+
+    const error = (() => {
+      try {
+        parseInputs()
+      } catch (caught) {
+        return caught as Error
+      }
+      throw new Error('expected parseInputs to throw')
+    })()
+    expect(error.message).toMatch(/does not exist or is not readable/)
+    expect(error.message).not.toContain('/secret/cosign.key')
+  })
+
+  it('requires COSIGN_PASSWORD for encrypted key signing', () => {
+    withInputs({
+      'disk-path': 'disk.qcow2',
+      signer: 'cosign-key',
+      'signing-key': 'cosign.key'
+    })
+
+    expect(() => parseInputs()).toThrow(/requires the COSIGN_PASSWORD/)
+  })
+
+  it('rejects raw private-key bytes and contradictory signing-key inputs', () => {
+    withInputs({
+      'disk-path': 'disk.qcow2',
+      signer: 'cosign-key',
+      'signing-key': '-----BEGIN ENCRYPTED PRIVATE KEY-----\nsecret'
+    })
+    expect(() => parseInputs()).toThrow(/never raw private-key bytes/)
+
+    withInputs({
+      'disk-path': 'disk.qcow2',
+      signer: 'github',
+      'signing-key': 'cosign.key'
+    })
+    expect(() => parseInputs()).toThrow(/does not accept signing-key/)
   })
 
   it('rejects an unreadable policy-path', () => {

@@ -38,8 +38,8 @@ export interface SignResult {
   bundleDir: string
   /** The exact signed bundle files produced, in stable role order. */
   bundles: SignBundle[]
-  /** URL of the validation attestation (the run's primary claim). */
-  attestationUrl: string
+  /** URL of the validation attestation, when the backend publishes one. */
+  attestationUrl?: string
 }
 
 /** A signing backend: turns a `SignContext` into signed, published evidence. */

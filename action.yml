@@ -43,8 +43,8 @@ inputs:
     default: none
   signing-key:
     description:
-      Key reference required by the selected signing backend (never raw key
-      bytes).
+      Encrypted key file or env://NAME for signer cosign-key; a reference only,
+      never raw private-key bytes.
     required: false
   github-token:
     description:

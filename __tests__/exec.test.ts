@@ -51,6 +51,40 @@ describe('exec.ts', () => {
     })
   })
 
+  it('uses a redacted display label without changing process arguments', async () => {
+    getExecOutput.mockResolvedValue({ stdout: '', stderr: '', exitCode: 0 })
+
+    await exec('cosign', ['--key', '/secret/key'], {
+      displayLabel: 'cosign --key [REDACTED]',
+      silent: true
+    })
+
+    expect(core.startGroup).toHaveBeenCalledWith('cosign --key [REDACTED]')
+    expect(getExecOutput).toHaveBeenCalledWith(
+      'cosign',
+      ['--key', '/secret/key'],
+      expect.objectContaining({ silent: true })
+    )
+  })
+
+  it('omits captured stderr from secret-bearing command errors', async () => {
+    getExecOutput.mockResolvedValue({
+      stdout: '',
+      stderr: 'failed to read /secret/key',
+      exitCode: 1
+    })
+
+    const error = await exec('cosign', ['--key', '/secret/key'], {
+      displayLabel: 'cosign --key [REDACTED]',
+      redactStderr: true
+    }).catch((caught) => caught as Error)
+
+    expect(error.message).toBe(
+      'Command failed with exit code 1: cosign --key [REDACTED]'
+    )
+    expect(error.message).not.toContain('/secret/key')
+  })
+
   it('throws on a non-zero exit by default and still closes the group', async () => {
     getExecOutput.mockResolvedValue({
       stdout: '',

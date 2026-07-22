@@ -56,6 +56,25 @@ steps:
     with: { disk-path: build/disk.qcow2, signer: github }
 ```
 
+Private repositories that cannot use GitHub's attestation API can produce
+portable, offline bundles with an encrypted Cosign key instead. Keep the private
+key and password in GitHub Secrets and distribute `cosign.pub` to verifiers
+through an independently trusted channel:
+
+```yaml
+permissions:
+  contents: read
+steps:
+  - uses: meigma/attest-vm-image@v1
+    env:
+      COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
+      COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
+    with:
+      disk-path: build/disk.qcow2
+      signer: cosign-key
+      signing-key: env://COSIGN_PRIVATE_KEY
+```
+
 Signing has repository plan and visibility requirements, and a failing result is
 never signed — see [Publish signed attestations][signing]. For a complete,
 runnable workflow, start with the [Getting started][getting-started] tutorial.
@@ -68,9 +87,9 @@ Every input and output is listed in the [reference][reference].
 - The action installs `qemu-utils` and `libguestfs-tools` itself at runtime, so
   the runner must permit `apt-get` and passwordless `sudo` — hosted `ubuntu-*`
   runners qualify by default.
-- Outbound network access to `github.com` for the pinned `syft` and `grype`
-  binaries, to the Grype vulnerability database, and — for `signer: github` — to
-  the GitHub attestation API.
+- Outbound network access to `github.com` for the pinned `syft`, `grype`, and
+  (when `signer: cosign-key`) `cosign` binaries, to the Grype vulnerability
+  database, and — for `signer: github` — to the GitHub attestation API.
 
 The full runner, privilege, and network catalog is in the
 [reference][requirements].
@@ -79,8 +98,8 @@ The full runner, privilege, and network catalog is in the
 
 - [Getting started][getting-started] — tutorial: wire the action into a
   workflow, produce a folder of evidence, and verify it yourself.
-- [Publish signed attestations][signing] — how-to: switch to `signer: github`
-  and publish signed GitHub attestations for the image.
+- [Publish signed attestations][signing] — how-to: publish with GitHub or create
+  offline bundles with an encrypted Cosign key.
 - [Verify evidence and attestations][verification] — how-to: verify checksums
   and published attestations as a downstream consumer.
 - [Control what fails validation][validation-policy] — how-to: tune the

@@ -4,17 +4,13 @@ import * as core from '@actions/core'
 import { attest, attestProvenance } from '@actions/attest'
 import type { Attestation, Subject } from '@actions/attest'
 import { PREDICATE_TYPE } from '../predicate.js'
-import type { SbomFormat } from '../inputs.js'
 import type { SignContext, SignResult, Signer } from './types.js'
+import { BUNDLE_DIR, sbomPredicateType } from './statements.js'
 
 /** Subdirectory (under `output-directory`) that holds the signed bundles. */
-const BUNDLE_DIR = 'attestations'
 const PROVENANCE_BUNDLE = 'provenance.sigstore.json'
 const SBOM_BUNDLE = 'sbom.sigstore.json'
 const VALIDATION_BUNDLE = 'validation.sigstore.json'
-
-/** Predicate-type URI for a CycloneDX SBOM document (version-independent). */
-const CYCLONEDX_PREDICATE_TYPE = 'https://cyclonedx.org/bom'
 
 /**
  * GitHub-native signing via the `@actions/attest` toolkit library (the same
@@ -192,13 +188,6 @@ function attestationUrl(id: string | undefined): string {
  * defaulting to `v2.3` when the field is absent or malformed; CycloneDX carries
  * no version in its predicate type.
  */
-function sbomPredicateType(format: SbomFormat, doc: object): string {
-  if (format === 'cyclonedx-json') return CYCLONEDX_PREDICATE_TYPE
-  const raw = (doc as { spdxVersion?: unknown }).spdxVersion
-  const match = typeof raw === 'string' ? /^SPDX-(\d+\.\d+)$/.exec(raw) : null
-  return `https://spdx.dev/Document/v${match ? match[1] : '2.3'}`
-}
-
 /** Log a non-primary attestation's URL to the workflow log. */
 function logAttestation(label: string, id: string | undefined): void {
   if (id) core.info(`${label} attestation: ${attestationUrl(id)}`)

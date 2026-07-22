@@ -48,6 +48,7 @@ const FAIL_ON_SEVERITIES: readonly FailOnSeverity[] = [
 // Backends that require a `signing-key` reference. `github` and
 // `sigstore-keyless` derive their identity from workflow OIDC and need none.
 const KEY_REFERENCE_BACKENDS: readonly Signer[] = ['cosign-key', 'kms']
+const ENV_KEY_REFERENCE = /^env:\/\/([A-Za-z_][A-Za-z0-9_]*)$/
 
 /**
  * Read `@actions/core` inputs, apply defaults, and validate them into a typed
@@ -91,6 +92,57 @@ export function parseInputs(): Inputs {
     throw new Error(
       `signer "${signer}" requires a signing-key reference, but none was provided.`
     )
+  }
+  if (signingKey && !KEY_REFERENCE_BACKENDS.includes(signer)) {
+    throw new Error(
+      `signer "${signer}" does not accept signing-key; remove the contradictory input.`
+    )
+  }
+  if (
+    signingKey &&
+    /[\r\n]|-----BEGIN [^-]*PRIVATE KEY-----/.test(signingKey)
+  ) {
+    throw new Error(
+      'signing-key must be a key reference, never raw private-key bytes.'
+    )
+  }
+  if (signer === 'cosign-key' && signingKey) {
+    const envMatch = ENV_KEY_REFERENCE.exec(signingKey)
+    if (signingKey.startsWith('env://')) {
+      if (!envMatch) {
+        throw new Error(
+          'signer "cosign-key" requires signing-key to be a readable encrypted key file or env://NAME.'
+        )
+      }
+      const secret = process.env[envMatch[1]]
+      if (!secret) {
+        throw new Error(
+          `signing-key references environment variable ${envMatch[1]}, but it is unset or empty.`
+        )
+      }
+      core.setSecret(secret)
+    } else {
+      if (signingKey.includes('://')) {
+        throw new Error(
+          'signer "cosign-key" requires signing-key to be a readable encrypted key file or env://NAME.'
+        )
+      }
+      try {
+        fs.accessSync(signingKey, fs.constants.R_OK)
+      } catch {
+        throw new Error(
+          'signer "cosign-key" signing-key file does not exist or is not readable.'
+        )
+      }
+    }
+
+    const password = process.env.COSIGN_PASSWORD
+    if (!password) {
+      throw new Error(
+        'signer "cosign-key" requires the COSIGN_PASSWORD environment variable for the encrypted key.'
+      )
+    }
+    core.setSecret(password)
   }
 
   const policyPath = core.getInput('policy-path') || undefined

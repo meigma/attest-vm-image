@@ -1,8 +1,7 @@
-# How to publish signed attestations
+# How to sign attestations
 
-Switch a working run from unsigned evidence to `signer: github`, so the action
-publishes signed GitHub attestations for your VM image alongside the evidence
-files.
+Switch a working unsigned run to either GitHub-published attestations or
+portable bundles signed with an encrypted Cosign key.
 
 ## Prerequisites
 
@@ -11,8 +10,22 @@ files.
   [Getting started](getting-started.md) first.
 - The action running in the **same job** that built the QCOW2 (see
   [how-it-works.md](how-it-works.md) for why this matters).
-- A repository whose plan and visibility can issue attestations. Check the
-  matrix below before you start.
+- For `signer: github`, a repository whose plan and visibility can issue
+  attestations. Check the matrix below.
+- For `signer: cosign-key`, Cosign `v3.1.2` on the administrator machine that
+  creates the key, plus a separate trusted way to distribute `cosign.pub`.
+
+## Choose a signing backend
+
+| Backend      | Use it when                                               | Public service                                  |
+| ------------ | --------------------------------------------------------- | ----------------------------------------------- |
+| `github`     | The repository can use GitHub's attestation API.          | GitHub OIDC and the GitHub attestation API.     |
+| `cosign-key` | A private repository needs portable, key-trusted bundles. | None while signing; bundles stay on the runner. |
+
+Both modes create the same three stable bundle roles. Only `github` publishes
+them and sets `attestation-url`.
+
+## Publish with GitHub
 
 ### Check your repository is eligible
 
@@ -31,8 +44,6 @@ Two more conditions must hold at run time:
 - The run must be on the **same repository**, not a fork pull request. Fork pull
   requests receive a read-only token and no OIDC token, so signing cannot run.
 - The job must grant the permissions in step 1.
-
-## Steps
 
 ### 1. Grant the signing permissions
 
@@ -104,7 +115,7 @@ predicate-type URIs, and subjects are in
 [reference](reference.md#attestation-bundles); the output set-conditions are in
 [reference](reference.md#outputs).
 
-## Verification
+### 5. Verify the published attestation
 
 Confirm signing happened by checking that `attestation-url` is non-empty in the
 step's outputs, or by reading the run log for the three logged attestation URLs.
@@ -118,6 +129,76 @@ check from the same runner is:
     GH_TOKEN: ${{ github.token }}
   run: gh attestation verify build/disk.qcow2 --repo ${{ github.repository }}
 ```
+
+## Sign with an encrypted Cosign key
+
+This mode is intended for private repositories that cannot or do not want to use
+GitHub's attestation API. It does not request OIDC, publish to Rekor, or use a
+timestamp authority. The caller is responsible for protecting the private key
+and establishing trust in the public key.
+
+### 1. Generate and distribute the key pair
+
+Run this once on an administrator machine, not in the image-build workflow:
+
+```bash
+export COSIGN_PASSWORD='<strong unique password>'
+cosign generate-key-pair
+```
+
+Store the contents of `cosign.key` and the password as separate GitHub Actions
+secrets, for example `COSIGN_PRIVATE_KEY` and `COSIGN_PASSWORD`. Distribute
+`cosign.pub` to consumers through an independently trusted channel. A public key
+delivered beside an otherwise untrusted image and bundles does not establish who
+signed them.
+
+### 2. Configure the action
+
+Only `contents: read` is needed. Reference the secret environment variable by
+name; do not put private-key bytes in `signing-key`:
+
+```yaml
+jobs:
+  attest:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      # Earlier steps build build/disk.qcow2.
+      - uses: meigma/attest-vm-image@v1
+        env:
+          COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
+          COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
+        with:
+          disk-path: build/disk.qcow2
+          signer: cosign-key
+          signing-key: env://COSIGN_PRIVATE_KEY
+```
+
+Alternatively, a preceding step may materialize the encrypted key into a
+runner-local file and pass that readable path as `signing-key`. The action masks
+the resolved environment secrets and redacts key references from Cosign command
+labels and errors.
+
+### 3. Retain the bundles
+
+On a passing result, upload the evidence directory using your normal private
+artifact storage. `attestation-bundle-path` points to its `attestations/`
+subdirectory. `attestation-url` and the manifest's `attestationUrl` field remain
+unset because nothing was published.
+
+The action explicitly configures Cosign with no Fulcio, OIDC, Rekor, or TSA
+services, then checks that all three bundles contain zero transparency-log
+entries. It verifies every signature and subject digest against the derived
+public key before atomically exposing the bundle directory.
+
+### 4. Verify with the independently trusted public key
+
+Follow the `cosign-key` procedure in
+[Verify evidence and attestations](verification.md#verify-cosign-key-bundles).
+The `--insecure-ignore-tlog` flag is required because this mode intentionally
+has no transparency entry; it does not disable public-key signature or subject
+verification.
 
 ## Troubleshooting
 
@@ -163,10 +244,9 @@ example by gating the job on the head repository matching the base repository.
 
 ### The run failed with a "not yet implemented" signer error
 
-Only `none` and `github` are implemented. Selecting `sigstore-keyless`,
-`cosign-key`, or `kms` passes input validation but throws when the signing step
-is reached on a passing result. Use `github` (or `none`)
-([reference](reference.md#failure-modes)).
+`sigstore-keyless` and `kms` remain later slices. Selecting either throws when
+the signing step is reached on a passing result. Use `github`, `cosign-key`, or
+`none` ([reference](reference.md#failure-modes)).
 
 ## Related
 

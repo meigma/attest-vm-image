@@ -443,6 +443,40 @@ describe('main.ts orchestration', () => {
     expect(core.setFailed).not.toHaveBeenCalled()
   })
 
+  it('sets the bundle path but omits URL fields for a local external signer', async () => {
+    parseInputs.mockReturnValue(
+      baseInputs({ signer: 'cosign-key', signingKey: 'cosign.key' })
+    )
+    sign.mockResolvedValueOnce({
+      bundleDir: '/evidence/attestations',
+      bundles: [
+        {
+          role: 'provenance-attestation',
+          path: '/evidence/attestations/provenance.sigstore.json'
+        },
+        {
+          role: 'sbom-attestation',
+          path: '/evidence/attestations/sbom.sigstore.json'
+        },
+        {
+          role: 'validation-attestation',
+          path: '/evidence/attestations/validation.sigstore.json'
+        }
+      ]
+    })
+
+    await run()
+
+    expect(core.setOutput).toHaveBeenCalledWith(
+      'attestation-bundle-path',
+      '/evidence/attestations'
+    )
+    expect(outputNames()).not.toContain('attestation-url')
+    expect(writeEvidenceManifest).toHaveBeenCalledWith(
+      expect.not.objectContaining({ attestationUrl: expect.anything() })
+    )
+  })
+
   it('never signs a failing result, logs a skip notice, and still fails evidence-complete for signer:github', async () => {
     parseInputs.mockReturnValue(baseInputs({ signer: 'github' }))
     vulnResult = { ...vulnResult, thresholdExceeded: true }
