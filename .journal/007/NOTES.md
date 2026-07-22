@@ -203,3 +203,26 @@ labels all five providers as URI-contract supported with live field testing
 pending. Next: commit, rerun `moon run root:check`, publish a draft stacked PR,
 verify ordinary hosted checks, and leave the exact AWS canary prerequisite
 visible rather than claiming the slice was field-tested.
+
+## 2026-07-22 08:38 — Slice 3 published for review
+
+Published KMS Slice 3 as draft PR #24 at exact head
+`c15add7ca0ef2ce002069e93b50d5085462a9382`, stacked directly on the Slice 2
+branch from PR #23. The review diff contains one KMS-specific commit and 17
+files. Merge order remains #22, then #23, then #24.
+
+The complete local `moon run root:check` passed with 254 tests, formatting,
+lint, audit, packaging, and committed-dist verification. Strict docs and
+Actionlint also passed. Hosted CI, GitHub Pages, Kusari Inspector, and both
+ordinary Integration jobs passed on the same exact head while the PR was
+temporarily based on `main`; it was then retargeted to the correct stacked base
+without changing the head.
+
+PR #24 intentionally remains draft because the live non-exportable AWS KMS
+canary is not currently runnable: the repository still has no protected
+`kms-integration` environment, AWS role ARN, key ARN, or region. The included
+manual main-only workflow captures the proof path after those external
+resources are provisioned, without granting KMS access to pull-request code.
+Until that run passes, AWS, GCP, Azure, Vault, and OpenBao remain documented as
+URI-contract supported with field testing pending rather than production-
+proven backends.
