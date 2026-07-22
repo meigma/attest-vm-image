@@ -57,10 +57,9 @@ steps:
 ```
 
 Signing has repository plan and visibility requirements, and a failing result is
-never signed — see [Publish signed attestations](docs/signing.md). For a
-complete, runnable workflow, start with the
-[Getting started](docs/getting-started.md) tutorial. Every input and output is
-listed in the [reference](docs/reference.md).
+never signed — see [Publish signed attestations][signing]. For a complete,
+runnable workflow, start with the [Getting started][getting-started] tutorial.
+Every input and output is listed in the [reference][reference].
 
 ## Requirements at a glance
 
@@ -74,24 +73,33 @@ listed in the [reference](docs/reference.md).
   the GitHub attestation API.
 
 The full runner, privilege, and network catalog is in the
-[reference](docs/reference.md#requirements).
+[reference][requirements].
 
 ## Documentation
 
-- [Getting started](docs/getting-started.md) — tutorial: wire the action into a
+- [Getting started][getting-started] — tutorial: wire the action into a
   workflow, produce a folder of evidence, and verify it yourself.
-- [Publish signed attestations](docs/signing.md) — how-to: switch to
-  `signer: github` and publish signed GitHub attestations for the image.
-- [Verify evidence and attestations](docs/verification.md) — how-to: verify
-  checksums and published attestations as a downstream consumer.
-- [Control what fails validation](docs/validation-policy.md) — how-to: tune the
+- [Publish signed attestations][signing] — how-to: switch to `signer: github`
+  and publish signed GitHub attestations for the image.
+- [Verify evidence and attestations][verification] — how-to: verify checksums
+  and published attestations as a downstream consumer.
+- [Control what fails validation][validation-policy] — how-to: tune the
   vulnerability threshold and the contamination policy.
-- [Troubleshoot a failed run](docs/troubleshooting.md) — how-to: a symptom-first
+- [Troubleshoot a failed run][troubleshooting] — how-to: a symptom-first
   decision path when a run fails.
-- [Reference](docs/reference.md) — every input, output, evidence file,
-  requirement, and failure mode in one place.
-- [How attest-vm-image works](docs/how-it-works.md) — explanation: the mental
-  model behind the evidence and the two ways a run can fail.
+- [Reference][reference] — every input, output, evidence file, requirement, and
+  failure mode in one place.
+- [How attest-vm-image works][how-it-works] — explanation: the mental model
+  behind the evidence and the two ways a run can fail.
+
+[getting-started]: https://meigma.github.io/attest-vm-image/getting-started/
+[signing]: https://meigma.github.io/attest-vm-image/signing/
+[verification]: https://meigma.github.io/attest-vm-image/verification/
+[validation-policy]: https://meigma.github.io/attest-vm-image/validation-policy/
+[troubleshooting]: https://meigma.github.io/attest-vm-image/troubleshooting/
+[reference]: https://meigma.github.io/attest-vm-image/reference/
+[requirements]: https://meigma.github.io/attest-vm-image/reference/#requirements
+[how-it-works]: https://meigma.github.io/attest-vm-image/how-it-works/
 
 ## Development
 
@@ -99,7 +107,7 @@ Tooling is pinned by [mise](https://mise.jdx.dev) and tasks run through
 [moon](https://moonrepo.dev).
 
 ```sh
-mise install         # provision the pinned toolchain (Node, moon)
+mise install         # provision the pinned toolchain (Node, Python, uv, moon)
 moon run root:check  # the full CI gate: format-check, lint, test, check-dist, audit
 ```
 
@@ -110,6 +118,8 @@ moon run root:format   # prettier --write
 moon run root:lint     # eslint
 moon run root:test     # jest
 moon run root:package  # rebuild dist/
+moon run docs:build    # build the documentation site strictly
+moon run docs:serve    # serve the documentation site locally
 ```
 
 The bundled action (`dist/index.js`) is **committed** — that is what
