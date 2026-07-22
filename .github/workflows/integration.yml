@@ -72,9 +72,24 @@ jobs:
             sbom.spdx.json \
             vulnerability-report.json \
             validation-report.json \
-            validation-predicate.json; do
+            validation-predicate.json \
+            evidence-manifest.json; do
             test -f "$dir/$f" || { echo "missing $dir/$f" >&2; exit 1; }
           done
+
+          echo "Unsigned output conditions and manifest ordering are exact"
+          test '${{ steps.positive.outputs.checksums-path }}' = "$dir/checksums.txt"
+          test '${{ steps.positive.outputs.sbom-path }}' = "$dir/sbom.spdx.json"
+          test '${{ steps.positive.outputs.vulnerability-report-path }}' = "$dir/vulnerability-report.json"
+          test '${{ steps.positive.outputs.validation-report-path }}' = "$dir/validation-report.json"
+          test '${{ steps.positive.outputs.validation-predicate-path }}' = "$dir/validation-predicate.json"
+          test '${{ steps.positive.outputs.evidence-manifest-path }}' = "$dir/evidence-manifest.json"
+          test -z '${{ steps.positive.outputs.attestation-bundle-path }}'
+          test -z '${{ steps.positive.outputs.attestation-url }}'
+          jq -e '[.evidence[].role] == [
+            "checksums", "sbom", "vulnerability-report",
+            "validation-report", "validation-predicate"
+          ]' "$dir/evidence-manifest.json" >/dev/null
 
           echo "disk-digest output matches sha256sum of disk.qcow2"
           hex="$(sha256sum disk.qcow2 | awk '{print $1}')"
@@ -189,7 +204,8 @@ jobs:
           disk-path: disk.qcow2
           output-directory: ./evidence-threshold
           fail-on-severity: high
-          signer: none
+          signer: kms
+          signing-key: awskms:///arn:aws:kms:us-west-2:123456789012:key/12345678-1234-1234-1234-123456789012
 
       - name: Assert threshold breach produced complete failing evidence
         run: |
@@ -207,9 +223,19 @@ jobs:
             sbom.spdx.json \
             vulnerability-report.json \
             validation-report.json \
-            validation-predicate.json; do
+            validation-predicate.json \
+            evidence-manifest.json; do
             test -f "$dir/$f" || { echo "missing $dir/$f" >&2; exit 1; }
           done
+
+          echo "A selected signer was never invoked and signing outputs are unset"
+          test -z '${{ steps.threshold.outputs.attestation-bundle-path }}'
+          test -z '${{ steps.threshold.outputs.attestation-url }}'
+          test ! -e "$dir/attestations"
+          jq -e '[.evidence[].role] == [
+            "checksums", "sbom", "vulnerability-report",
+            "validation-report", "validation-predicate"
+          ]' "$dir/evidence-manifest.json" >/dev/null
 
           echo "The predicate records the failure and the breach"
           jq -e '.predicate.result == "fail"' \
@@ -257,6 +283,12 @@ jobs:
           test -z '${{ steps.cosign_key.outputs.attestation-url }}'
           jq -e 'has("attestationUrl") | not' \
             evidence-cosign-key/evidence-manifest.json >/dev/null
+          jq -e '[.evidence[].role] == [
+            "checksums", "sbom", "vulnerability-report",
+            "validation-report", "validation-predicate",
+            "provenance-attestation", "sbom-attestation",
+            "validation-attestation"
+          ]' evidence-cosign-key/evidence-manifest.json >/dev/null
 
           for f in provenance sbom validation; do
             test -f "$dir/$f.sigstore.json"
@@ -372,6 +404,15 @@ jobs:
             echo "attestation-bundle-path was '$bundle'" >&2
             exit 1
           }
+
+          jq -e --arg url "$url" '.attestationUrl == $url' \
+            evidence-signed/evidence-manifest.json >/dev/null
+          jq -e '[.evidence[].role] == [
+            "checksums", "sbom", "vulnerability-report",
+            "validation-report", "validation-predicate",
+            "provenance-attestation", "sbom-attestation",
+            "validation-attestation"
+          ]' evidence-signed/evidence-manifest.json >/dev/null
 
       - name: Verify the attestation with the GitHub CLI
         env:

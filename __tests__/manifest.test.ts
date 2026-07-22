@@ -150,7 +150,7 @@ describe('evidence manifest', () => {
         role: entry.role,
         path: entry.path,
         sha256: sha256(readFileSync(entry.path, 'utf8')),
-        mediaType: 'application/vnd.dev.sigstore.bundle+json'
+        mediaType: 'application/vnd.dev.sigstore.bundle.v0.3+json'
       }))
     )
     expect(manifest.attestationUrl).toBe(

@@ -11,3 +11,8 @@ coverage/
 dist/
 mise.lock
 node_modules/
+
+# Rollup's TypeScript config plugin creates this transient file while packaging.
+# Moon CI runs packaging and formatting concurrently, so Prettier must not race
+# the file's creation and removal.
+rollup.config-*.mjs

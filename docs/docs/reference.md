@@ -41,7 +41,7 @@ Notes:
 
 | Provider         | Accepted form                                                        | Live validation status                         |
 | ---------------- | -------------------------------------------------------------------- | ---------------------------------------------- |
-| AWS KMS          | `awskms:///arn:PARTITION:kms:REGION:ACCOUNT:key/UUID`                | URI contract supported; field testing pending. |
+| AWS KMS          | `awskms:///arn:PARTITION:kms:REGION:ACCOUNT:key/UUID`                | Live field test passed with GitHub OIDC.       |
 | Google Cloud KMS | `gcpkms://projects/P/locations/L/keyRings/R/cryptoKeys/K/versions/N` | URI contract supported; field testing pending. |
 | Azure Key Vault  | `azurekms://VAULT.vault.azure.net/KEY/VERSION`                       | URI contract supported; field testing pending. |
 | HashiCorp Vault  | `hashivault://KEY`                                                   | URI contract supported; field testing pending. |
@@ -305,9 +305,9 @@ Contract:
 | `vulnerability-report`   | `application/json`                                          | Every completed run                 |
 | `validation-report`      | `application/json`                                          | Every completed run                 |
 | `validation-predicate`   | `application/vnd.in-toto+json`                              | Every completed run                 |
-| `provenance-attestation` | `application/vnd.dev.sigstore.bundle+json`                  | Passing run with successful signing |
-| `sbom-attestation`       | `application/vnd.dev.sigstore.bundle+json`                  | Passing run with successful signing |
-| `validation-attestation` | `application/vnd.dev.sigstore.bundle+json`                  | Passing run with successful signing |
+| `provenance-attestation` | `application/vnd.dev.sigstore.bundle.v0.3+json`             | Passing run with successful signing |
+| `sbom-attestation`       | `application/vnd.dev.sigstore.bundle.v0.3+json`             | Passing run with successful signing |
+| `validation-attestation` | `application/vnd.dev.sigstore.bundle.v0.3+json`             | Passing run with successful signing |
 
 Paths use the same conventions as the rest of the action: input artifact paths
 are recorded as supplied, and generated evidence paths are the paths written

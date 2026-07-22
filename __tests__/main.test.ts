@@ -194,7 +194,7 @@ jest.unstable_mockModule('../src/manifest.js', () => ({
     cyclonedx: 'application/vnd.cyclonedx+json',
     json: 'application/json',
     inToto: 'application/vnd.in-toto+json',
-    sigstoreBundle: 'application/vnd.dev.sigstore.bundle+json'
+    sigstoreBundle: 'application/vnd.dev.sigstore.bundle.v0.3+json'
   },
   writeEvidenceManifest
 }))
@@ -216,6 +216,21 @@ function baseInputs(overrides: Partial<Inputs> = {}): Inputs {
     githubToken: '',
     ...overrides
   }
+}
+
+function signingInputs(signer: Inputs['signer']): Inputs {
+  if (signer === 'cosign-key') {
+    return baseInputs({ signer, signingKey: 'cosign.key' })
+  }
+  if (signer === 'kms') {
+    return baseInputs({
+      signer,
+      signingKey:
+        'awskms:///arn:aws:kms:us-west-2:123456789012:key/' +
+        '12345678-1234-1234-1234-123456789012'
+    })
+  }
+  return baseInputs({ signer })
 }
 
 const outputNames = (): string[] =>
@@ -432,6 +447,17 @@ describe('main.ts orchestration', () => {
         ])
       })
     )
+    const manifestInput = writeEvidenceManifest.mock.calls[0][0]
+    expect(manifestInput.evidence.map((entry) => entry.role)).toEqual([
+      'checksums',
+      'sbom',
+      'vulnerability-report',
+      'validation-report',
+      'validation-predicate',
+      'provenance-attestation',
+      'sbom-attestation',
+      'validation-attestation'
+    ])
     expect(core.setOutput).toHaveBeenCalledWith(
       'attestation-bundle-path',
       '/evidence/attestations'
@@ -443,69 +469,98 @@ describe('main.ts orchestration', () => {
     expect(core.setFailed).not.toHaveBeenCalled()
   })
 
-  it('sets the bundle path but omits URL fields for a local external signer', async () => {
-    parseInputs.mockReturnValue(
-      baseInputs({ signer: 'cosign-key', signingKey: 'cosign.key' })
-    )
-    sign.mockResolvedValueOnce({
-      bundleDir: '/evidence/attestations',
-      bundles: [
-        {
-          role: 'provenance-attestation',
-          path: '/evidence/attestations/provenance.sigstore.json'
-        },
-        {
-          role: 'sbom-attestation',
-          path: '/evidence/attestations/sbom.sigstore.json'
-        },
-        {
-          role: 'validation-attestation',
-          path: '/evidence/attestations/validation.sigstore.json'
-        }
-      ]
-    })
-
-    await run()
-
-    expect(core.setOutput).toHaveBeenCalledWith(
-      'attestation-bundle-path',
-      '/evidence/attestations'
-    )
-    expect(outputNames()).not.toContain('attestation-url')
-    expect(writeEvidenceManifest).toHaveBeenCalledWith(
-      expect.not.objectContaining({ attestationUrl: expect.anything() })
-    )
-  })
-
-  it('never signs a failing result, logs a skip notice, and still fails evidence-complete for signer:github', async () => {
-    parseInputs.mockReturnValue(baseInputs({ signer: 'github' }))
-    vulnResult = { ...vulnResult, thresholdExceeded: true }
-    evidenceResult = 'fail'
-
-    await run()
-
-    // A failing result is never signed.
-    expect(selectSigner).not.toHaveBeenCalled()
-    expect(sign).not.toHaveBeenCalled()
-    expect(core.info).toHaveBeenCalledWith(
-      expect.stringContaining('a failing result is never signed')
-    )
-    // No attestation outputs were set.
-    expect(outputNames()).not.toContain('attestation-bundle-path')
-    expect(outputNames()).not.toContain('attestation-url')
-    expect(writeEvidenceManifest).toHaveBeenCalledWith(
-      expect.objectContaining({
-        result: 'fail',
-        evidence: expect.not.arrayContaining([
-          expect.objectContaining({ role: 'validation-attestation' })
-        ])
+  it.each(['sigstore-keyless', 'cosign-key', 'kms'] as const)(
+    'sets the bundle path but omits URL fields for signer:%s',
+    async (signer) => {
+      parseInputs.mockReturnValue(signingInputs(signer))
+      sign.mockResolvedValueOnce({
+        bundleDir: '/evidence/attestations',
+        bundles: [
+          {
+            role: 'provenance-attestation',
+            path: '/evidence/attestations/provenance.sigstore.json'
+          },
+          {
+            role: 'sbom-attestation',
+            path: '/evidence/attestations/sbom.sigstore.json'
+          },
+          {
+            role: 'validation-attestation',
+            path: '/evidence/attestations/validation.sigstore.json'
+          }
+        ]
       })
-    )
-    // The evidence-complete failure still fires.
-    const msg = core.setFailed.mock.calls[0][0] as string
-    expect(msg).toMatch(/complete evidence was written/)
-    expect(drain).toHaveBeenCalledTimes(1)
-  })
+
+      await run()
+
+      expect(core.setOutput).toHaveBeenCalledWith(
+        'attestation-bundle-path',
+        '/evidence/attestations'
+      )
+      expect(outputNames()).toEqual([
+        'attestation-bundle-path',
+        'disk-digest',
+        'checksums-path',
+        'sbom-path',
+        'vulnerability-report-path',
+        'validation-report-path',
+        'validation-predicate-path',
+        'evidence-manifest-path'
+      ])
+      expect(writeEvidenceManifest).toHaveBeenCalledWith(
+        expect.not.objectContaining({ attestationUrl: expect.anything() })
+      )
+      const manifestInput = writeEvidenceManifest.mock.calls[0][0]
+      expect(manifestInput.evidence.map((entry) => entry.role)).toEqual([
+        'checksums',
+        'sbom',
+        'vulnerability-report',
+        'validation-report',
+        'validation-predicate',
+        'provenance-attestation',
+        'sbom-attestation',
+        'validation-attestation'
+      ])
+    }
+  )
+
+  it.each(['github', 'sigstore-keyless', 'cosign-key', 'kms'] as const)(
+    'never signs a failing result and still completes unsigned evidence for signer:%s',
+    async (signer) => {
+      parseInputs.mockReturnValue(signingInputs(signer))
+      vulnResult = { ...vulnResult, thresholdExceeded: true }
+      evidenceResult = 'fail'
+
+      await run()
+
+      expect(selectSigner).not.toHaveBeenCalled()
+      expect(sign).not.toHaveBeenCalled()
+      expect(core.info).toHaveBeenCalledWith(
+        expect.stringContaining('a failing result is never signed')
+      )
+      expect(outputNames()).toEqual([
+        'disk-digest',
+        'checksums-path',
+        'sbom-path',
+        'vulnerability-report-path',
+        'validation-report-path',
+        'validation-predicate-path',
+        'evidence-manifest-path'
+      ])
+      const manifestInput = writeEvidenceManifest.mock.calls[0][0]
+      expect(manifestInput.result).toBe('fail')
+      expect(manifestInput.evidence.map((entry) => entry.role)).toEqual([
+        'checksums',
+        'sbom',
+        'vulnerability-report',
+        'validation-report',
+        'validation-predicate'
+      ])
+      const msg = core.setFailed.mock.calls[0][0] as string
+      expect(msg).toMatch(/complete evidence was written/)
+      expect(drain).toHaveBeenCalledTimes(1)
+    }
+  )
 
   it('fails the run and still drains when parseInputs throws', async () => {
     parseInputs.mockImplementation(() => {
@@ -523,17 +578,20 @@ describe('main.ts orchestration', () => {
     expect(outputNames()).toEqual([])
   })
 
-  it('does not write or claim a manifest when signing aborts', async () => {
-    parseInputs.mockReturnValue(baseInputs({ signer: 'github' }))
-    sign.mockRejectedValueOnce(new Error('OIDC token request timed out'))
+  it.each(['github', 'sigstore-keyless', 'cosign-key', 'kms'] as const)(
+    'does not write or claim a manifest when signer:%s aborts',
+    async (signer) => {
+      parseInputs.mockReturnValue(signingInputs(signer))
+      sign.mockRejectedValueOnce(new Error(`${signer} signing failed`))
 
-    await run()
+      await run()
 
-    expect(writeChecksums).toHaveBeenCalledTimes(1)
-    expect(writeEvidenceManifest).not.toHaveBeenCalled()
-    expect(outputNames()).toEqual([])
-    expect(core.setFailed).toHaveBeenCalledWith('OIDC token request timed out')
-  })
+      expect(writeChecksums).toHaveBeenCalledTimes(1)
+      expect(writeEvidenceManifest).not.toHaveBeenCalled()
+      expect(outputNames()).toEqual([])
+      expect(core.setFailed).toHaveBeenCalledWith(`${signer} signing failed`)
+    }
+  )
 
   it('sets no outputs when the manifest handoff cannot be completed', async () => {
     writeEvidenceManifest.mockRejectedValueOnce(
