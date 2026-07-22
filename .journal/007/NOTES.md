@@ -37,3 +37,25 @@ shared Cosign engine delivered in a disposable probe plus three vertical slices.
 The initial privacy contract makes public Sigstore explicit for keyless and
 uses a no-service signing configuration for key/KMS. Implementation has not
 started; the next step is user review.
+
+## 2026-07-21 22:30 — Phase 0 compatibility probe passed
+
+Executed the approved disposable probe with Cosign v3.1.2. Local encrypted-key
+signing produced and verified provenance, SPDX, and validation v0.3 bundles;
+the complete decoded statements matched their inputs, disk plus metadata
+subjects verified from precomputed digests, incorrect type/digest and tampered
+signature checks failed, and the explicit no-service configuration produced
+zero Rekor entries in every bundle.
+
+Hosted run `29893836807` proved an environment-built SLSA v1 predicate exactly
+matches `@actions/attest` 3.2.0's OIDC-derived predicate in an ordinary trusted
+push. One intentional keyless entry verified using the exact workflow identity
+and GitHub issuer; negative identity/issuer checks failed. Live Rekor log index
+`2216217956` matched the bundle. Its body stores envelope/payload hashes,
+signature, and the full certificate—not the complete statement—but the
+certificate permanently exposes repository/workflow/ref/SHA/run identity and
+visibility.
+
+Full results and Slice 1 consequences are in
+`.journal/007/PHASE0_SIGNING_PROBE_REPORT.md`. The Phase 0 exit gate passed; no
+production action code changed. Await explicit approval before Slice 1.
