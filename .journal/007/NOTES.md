@@ -389,3 +389,33 @@ environment/layout artifact rather than a merged-tree failure. A clean temporary
 Git archive of exact main, initialized only so `check-dist` could compare Git
 state, passed `moon run root:check` with all 262 tests. The temporary archive was
 moved to Trash afterward.
+
+## 2026-07-22 11:05 — Released v1.2.0
+
+Release Please PR #26 proposed the expected minor release with only the manifest,
+changelog, `package.json`, and lockfile version changes. Its exact head `95214cf`
+passed CI, Pages, Kusari, image construction, and signing integration, then
+squash-merged as `74df230` with explicit release approval.
+
+Release Please run `29944737735` succeeded and created tag `v1.2.0` plus a draft
+release targeting `74df230`. Before publication, confirmed the release notes list
+the three new signing backends and hardening fix, the release is not a
+prerelease, and its generated source archive contains `action.yml`, the committed
+`dist/index.js`, and package version 1.2.0 while omitting the removed persistent
+KMS workflow. The lack of binary assets is expected for this bundled JavaScript
+action.
+
+Published https://github.com/meigma/attest-vm-image/releases/tag/v1.2.0 as the
+latest release. Major Version Tag run `29944806751` passed and moved `v1` to the
+same exact commit. Remote `main`, `v1.2.0`, and `v1` all resolve to `74df230`.
+The release-commit CI, GitHub Pages, Release Please, and Integration workflows
+all passed; Integration run `29944737605` independently exercised GitHub signing,
+attestation verification, image success/failure paths, and encrypted Cosign-key
+signing.
+
+Fast-forwarded local `main` to `74df230` and explicitly refreshed the intentionally
+moving local `v1` tag after the ordinary tag fetch correctly refused to clobber
+it. Local `main`, `v1.2.0`, and `v1` now match the remote release commit. The
+downloaded inspection archive was moved to Trash. Both release workflows emitted
+a non-blocking deprecation annotation for the Release App `app-id` input; the
+release and major-tag update still completed successfully.
