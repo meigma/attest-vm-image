@@ -168,6 +168,20 @@ describe('GithubSigner.sign', () => {
       `https://github.com/${REPO}/attestations/val-id`
     )
     expect(result.bundleDir).toBe(join(dir, 'attestations'))
+    expect(result.bundles).toEqual([
+      {
+        role: 'provenance-attestation',
+        path: join(dir, 'attestations', 'provenance.sigstore.json')
+      },
+      {
+        role: 'sbom-attestation',
+        path: join(dir, 'attestations', 'sbom.sigstore.json')
+      },
+      {
+        role: 'validation-attestation',
+        path: join(dir, 'attestations', 'validation.sigstore.json')
+      }
+    ])
   })
 
   it('writes the three bundles to attestations/{provenance,sbom,validation}.sigstore.json', async () => {

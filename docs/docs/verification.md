@@ -27,11 +27,12 @@ and published the attestations — the image builder's repository, not
 
 ## Verify the evidence checksums
 
-`checksums.txt` covers the input disk and every unsigned evidence file, and is
-compatible with `sha256sum -c`. This works for every run regardless of `signer`,
-and verifying it re-checks the disk digest because the disk is the first line.
-Its format and exact line order are in
-[reference.md](reference.md#checksumstxt).
+`checksums.txt` covers the input disk and the four pre-manifest unsigned
+evidence documents, and is compatible with `sha256sum -c`. This works for every
+run regardless of `signer`, and verifying it re-checks the disk digest because
+the disk is the first line. `evidence-manifest.json` is written afterward and is
+deliberately excluded, as are the signed bundles. Its format and exact line
+order are in [reference.md](reference.md#checksumstxt).
 
 The action records each path exactly as it was passed, workspace-relative by
 default, so run the check from the same working directory the action ran in

@@ -149,6 +149,11 @@ jobs:
       - name: Show the evidence files
         run: ls -1 evidence
 
+      - name: Show the downstream handoff
+        env:
+          EVIDENCE_MANIFEST: ${{ steps.attest.outputs.evidence-manifest-path }}
+        run: jq . "$EVIDENCE_MANIFEST"
+
       - name: Verify the checksums
         run: sha256sum -c evidence/checksums.txt
 
@@ -185,11 +190,12 @@ checksums", succeeds.
 
 ## Step 3: See what the action produced
 
-Open the **Show the evidence files** step in the run log. You should see five
+Open the **Show the evidence files** step in the run log. You should see six
 files:
 
 ```text
 checksums.txt
+evidence-manifest.json
 sbom.spdx.json
 validation-predicate.json
 validation-report.json
@@ -201,6 +207,9 @@ Here is what each one is; the authoritative catalog lives in
 
 - `checksums.txt` — a `sha256sum -c`-style manifest listing the disk and every
   evidence file with its digest.
+- `evidence-manifest.json` — the versioned handoff for a later verifier or
+  publisher. It records the input disk and every evidence file by stable role,
+  path, SHA-256, and media type.
 - `sbom.spdx.json` — the Software Bill of Materials: every package the action
   found inside the image. Our seed image ships `base-files`, `openssl`, and
   `zlib1g`.
@@ -247,14 +256,21 @@ procedure are in [the reference](reference.md#checksumstxt) and
 You can rerun this integrity check any time to prove the evidence — and the
 exact image bytes it describes — have not changed.
 
+The evidence manifest is deliberately absent from `checksums.txt` because it is
+written afterward and cannot hash itself. Instead it hashes `checksums.txt` and
+each listed evidence file. Open the **Show the downstream handoff** step to see
+the exact document a later pipeline step can consume through
+`evidence-manifest-path`.
+
 ## What we did
 
 You wired `attest-vm-image` into a workflow, ran it against a QCOW2 image, and
 produced a complete folder of evidence: a checksum manifest, an SBOM, a
 vulnerability report, and a validation predicate carrying a `pass` verdict. You
-then verified that evidence against its own checksums. The action also exposes
-each of these files, plus the disk's digest, as step
-[outputs](reference.md#outputs) that later steps in a real pipeline can consume.
+then verified that evidence against its own checksums. The action exposes the
+versioned evidence manifest as the single downstream handoff, alongside the
+individual file paths and disk digest in its step
+[outputs](reference.md#outputs).
 
 ## Next steps
 

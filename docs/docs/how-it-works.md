@@ -46,8 +46,10 @@ A run is a single pass over the image in a fixed order: it acquires its tools,
 validates the disk structure, inspects the filesystem, validates the optional
 Incus metadata archive, generates an SBOM, scans that SBOM for vulnerabilities,
 runs the contamination checks, writes the evidence documents, seals the
-checksums, and — only then, and only if asked — signs. Each step's output feeds
-the next, which is why the order is fixed rather than configurable.
+checksums, and — only then, and only if asked — signs. It finishes by writing a
+versioned evidence manifest that hands all completed outputs to a downstream
+consumer. Each step's output feeds the next, which is why the order is fixed
+rather than configurable.
 
 The one part of that order that surprises people is the first part: the action
 installs and verifies all of its tools _before_ it even checks that `disk-path`
@@ -88,7 +90,7 @@ The second kind is an **evidence-complete failure**. The action evaluated the
 image without trouble, and the image itself did not pass — vulnerabilities at or
 above your configured threshold, or a contamination check that tripped. Here the
 whole pipeline runs, every evidence file is written (the predicate records a
-`fail` result), all six standard outputs are set, and only then does the run
+`fail` result), all seven standard outputs are set, and only then does the run
 fail. This is the "I evaluated this and it failed" outcome.
 
 These call for opposite responses, which is why conflating them causes bugs. An
@@ -106,11 +108,12 @@ evidence-complete case, and should be ready to find nothing — or a stray parti
 file — after an abort.
 
 One corollary catches people out: a thrown error _anywhere_ sets none of the
-outputs, and signing is the very last thing the action does. So a signing
-failure leaves complete, unsigned evidence on disk yet reports no outputs at
-all. "The step failed" tells you nothing on its own about whether evidence
-exists; the taxonomy above does. The [troubleshooting guide](troubleshooting.md)
-turns this into a concrete decision path.
+outputs. Signing happens after the unsigned evidence is sealed but before the
+handoff manifest is written. A signing failure therefore leaves the pre-manifest
+unsigned evidence on disk but reports no outputs and creates no handoff. "The
+step failed" tells you nothing on its own about whether evidence exists; the
+taxonomy above does. The [troubleshooting guide](troubleshooting.md) turns this
+into a concrete decision path.
 
 ## Why it never touches the image
 
@@ -139,11 +142,12 @@ attested.
 
 ## The evidence it leaves behind
 
-Every run — signed or not — produces the same core set of evidence: an immutable
-digest manifest, an SBOM, a vulnerability report, and two closely related JSON
-documents, the validation predicate and the validation report. The
-[reference](reference.md#evidence-files) enumerates the exact files; the point
-worth understanding is how those documents relate.
+Every completed run — signed or not — produces the same core set of evidence: an
+immutable checksum manifest, an SBOM, a vulnerability report, two closely
+related JSON documents (the validation predicate and validation report), and a
+versioned evidence manifest. The [reference](reference.md#evidence-files)
+enumerates the exact files; the point worth understanding is how those documents
+relate.
 
 The predicate and the report are two views of the same result. The predicate is
 the compact, signable claim — the payload an attestation carries. The report is
@@ -162,11 +166,20 @@ the action wrote and that the recorded disk digest is the digest they have. It
 is the floor of verifiability that does not depend on any signing
 infrastructure; the [verification guide](verification.md) shows how to use it.
 
+The evidence manifest serves a different purpose: it is the machine-readable
+handoff for the next pipeline stage. It identifies the exact input artifacts and
+lists every produced evidence file by stable role, path, media type, and digest.
+That lets a later verifier or publisher consume one versioned document instead
+of reconstructing this action's directory layout or combining several outputs.
+The action constructs the list from its known pipeline state; it never discovers
+arbitrary files by scanning the output directory.
+
 When you do sign, the attestations are also written locally as Sigstore bundles
 alongside the evidence. Those bundles are deliberately excluded from the
 checksum manifest: they are produced _after_ the checksums are sealed and carry
 their own Sigstore verification material, so folding them back into a manifest
-they postdate would be both impossible and redundant. The
+they postdate would be both impossible and redundant. They do appear in the
+later-written evidence manifest after signing succeeds. The
 [attestation bundles](reference.md#attestation-bundles) reference describes what
 each one covers.
 

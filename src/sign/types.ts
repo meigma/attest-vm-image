@@ -26,10 +26,18 @@ export interface SignContext {
   outputDir: string
 }
 
+/** A signed bundle written by a completed signing backend. */
+export interface SignBundle {
+  role: 'provenance-attestation' | 'sbom-attestation' | 'validation-attestation'
+  path: string
+}
+
 /** What a completed signing run reports back to the orchestrator. */
 export interface SignResult {
   /** Directory holding the three `*.sigstore.json` bundles. */
   bundleDir: string
+  /** The exact signed bundle files produced, in stable role order. */
+  bundles: SignBundle[]
   /** URL of the validation attestation (the run's primary claim). */
   attestationUrl: string
 }

@@ -21,17 +21,19 @@ A run fails in one of two ways. Determine which before doing anything else.
      report/predicate files. This is a **fail-closed abort**: a stage threw
      before the evidence was complete. Continue at
      [Fail-closed aborts](#fail-closed-aborts).
-   - **Complete** — `checksums.txt`, the SBOM, `vulnerability-report.json`,
-     `validation-report.json`, and `validation-predicate.json` are all present.
+   - **Complete handoff** — `checksums.txt`, the SBOM,
+     `vulnerability-report.json`, `validation-report.json`,
+     `validation-predicate.json`, and `evidence-manifest.json` are all present.
      Usually this is an **evidence-complete failure**: the image was inspected
      and failed validation. Continue at
-     [Evidence-complete failures](#evidence-complete-failures). One exception:
-     if `signer` is not `none` and the failure message is about signing or
-     attestations rather than a threshold or contamination check, the run passed
-     validation and then aborted while signing. The evidence is complete but no
-     output is set, which makes it a fail-closed abort — see
-     [signing failed but the evidence looks complete](#problem-signing-failed-but-the-evidence-looks-complete),
-     not this branch.
+     [Evidence-complete failures](#evidence-complete-failures).
+   - **Unsigned set without `evidence-manifest.json`** — this is a late
+     **fail-closed abort**, not an evidence-complete failure. If `signer` is not
+     `none` and the message names signing or attestations, the run passed
+     validation and then aborted while signing; see
+     [signing failed but the evidence looks complete](#problem-signing-failed-but-the-evidence-looks-complete).
+     Otherwise the manifest itself could not be completed, for example because
+     an evidence file disappeared before it could be hashed.
 
    The exact file list is in [Evidence files](reference.md#evidence-files).
 
@@ -40,10 +42,10 @@ A run fails in one of two ways. Determine which before doing anything else.
    fail-closed abort — including a signing failure — `disk-digest`,
    `checksums-path`, and every other output are unset, even when evidence files
    already exist on disk. A pass and an evidence-complete failure both set the
-   six standard outputs, so their presence tells you the pipeline finished but
-   not whether it passed. In short, complete evidence with the six outputs unset
-   is a signing-stage abort, not an evidence-complete failure. See
-   [Outputs](reference.md#outputs).
+   seven standard outputs, so their presence tells you the pipeline finished but
+   not whether it passed. In short, the pre-manifest unsigned set with all
+   outputs unset is a late fail-closed abort, not an evidence-complete failure.
+   See [Outputs](reference.md#outputs).
 
 ## Evidence-complete failures
 
@@ -185,10 +187,11 @@ actually reached and throws the "not yet implemented" diagnostic instead.
 
 ### Problem: signing failed but the evidence looks complete
 
-A signing failure aborts after the unsigned evidence is sealed. Complete
-unsigned evidence exists on disk, but — as with every thrown error — the run
-sets no outputs, so `attestation-url`, `attestation-bundle-path`, and the six
-standard outputs are all empty.
+A signing failure aborts after the unsigned evidence is sealed but before the
+handoff is written. The checksum manifest and unsigned evidence documents exist
+on disk, but `evidence-manifest.json` does not and — as with every thrown error
+— the run sets no outputs. `attestation-url`, `attestation-bundle-path`, and the
+seven standard outputs are all empty.
 
 **Solution:** Fix the signing failure using the relevant entry above, then
 re-run. The unsigned evidence from the failed run is valid on its own; a later

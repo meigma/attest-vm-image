@@ -54,8 +54,8 @@ this point; those messages are cataloged under [Failure modes](#failure-modes).
 
 ## Outputs
 
-The action defines eight outputs. Whether each is set depends on the run
-outcome, of which there are three:
+The action defines nine outputs. Whether each is set depends on the run outcome,
+of which there are three:
 
 - **Pass** — the pipeline completes and the overall `result` is `pass`.
 - **Evidence-complete fail** — the pipeline completes but `result` is `fail` (a
@@ -71,12 +71,13 @@ outcome, of which there are three:
 | `vulnerability-report-path` | Path to `vulnerability-report.json`                           | Pass; evidence-complete fail        |
 | `validation-report-path`    | Path to `validation-report.json`                              | Pass; evidence-complete fail        |
 | `validation-predicate-path` | Path to `validation-predicate.json`                           | Pass; evidence-complete fail        |
+| `evidence-manifest-path`    | Path to `evidence-manifest.json`                              | Pass; evidence-complete fail        |
 | `attestation-bundle-path`   | Directory of signed bundles (default `evidence/attestations`) | Pass **and** `signer` is not `none` |
 | `attestation-url`           | URL of the validation attestation only                        | Pass **and** `signer` is `github`   |
 
 Notes:
 
-- The six non-attestation outputs are set on both a pass and an
+- The seven non-attestation outputs are set on both a pass and an
   evidence-complete fail; none are set on any thrown error.
 - `attestation-bundle-path` and `attestation-url` are set only on the pass path
   with signing. A failing result is never signed, so both remain unset even when
@@ -156,14 +157,18 @@ are fixed except the SBOM, whose name depends on `sbom-format`.
 | `vulnerability-report.json`             | Evidence stage reached            | The raw Grype JSON report.                                |
 | `validation-report.json`                | Evidence stage reached            | Flattened predicate plus `incusMetadata.properties`.      |
 | `validation-predicate.json`             | Evidence stage reached            | The in-toto statement (subject + predicate).              |
+| `evidence-manifest.json`                | Complete pass or validation fail  | Versioned handoff describing inputs and evidence.         |
 | `attestations/provenance.sigstore.json` | `signer` not `none` **and** pass  | Build-provenance Sigstore bundle.                         |
 | `attestations/sbom.sigstore.json`       | `signer` not `none` **and** pass  | SBOM attestation Sigstore bundle.                         |
 | `attestations/validation.sigstore.json` | `signer` not `none` **and** pass  | Validation attestation Sigstore bundle.                   |
 
-Exactly one SBOM file is written per run. The five unsigned evidence files and
-`checksums.txt` are all present on both a pass and an evidence-complete fail. A
-fail-closed abort partway through the pipeline may leave a partial subset (a
-stage that threw wrote nothing past it) and never sets outputs; see
+Exactly one SBOM file is written per run. A completed unsigned run writes six
+files: `checksums.txt`, one SBOM, the vulnerability report, the two validation
+documents, and `evidence-manifest.json`. An evidence-complete fail writes that
+same set with `result: fail` in both the predicate and the evidence manifest. A
+signed pass adds the three bundles. A fail-closed abort partway through the
+pipeline may leave a partial subset and never sets outputs; a signing abort
+occurs before the evidence manifest is written. See
 [Failure modes](#failure-modes) and [how-it-works.md](how-it-works.md).
 
 `validation-report.json` differs from `validation-predicate.json` in exactly one
@@ -190,14 +195,77 @@ Line order (exact):
 6. `validation-report.json`
 7. `validation-predicate.json`
 
-The `attestations/` bundles are **excluded** from `checksums.txt`: they are
-written after `checksums.txt` is sealed and carry their own Sigstore
-verification material.
+The `attestations/` bundles and `evidence-manifest.json` are **excluded** from
+`checksums.txt`. The bundles are written after `checksums.txt` is sealed and
+carry their own Sigstore verification material. The evidence manifest is written
+last, hashes `checksums.txt` and every listed evidence file from their actual
+bytes, and cannot include itself. This preserves the checksum manifest's
+existing coverage and exact line order.
 
 Disk re-digest guard: before writing `checksums.txt`, the action re-hashes
 `disk-path` and compares it to the digest computed during disk validation. Any
 difference aborts before `checksums.txt` is written (see
 [Failure modes](#failure-modes): `The input disk ... changed during the run`).
+
+## evidence-manifest.json
+
+The evidence manifest is the single handoff document for a later verifier or
+publisher. Read its location from `evidence-manifest-path`; do not reconstruct
+the output layout. Version 1 has this shape:
+
+```json
+{
+  "schemaVersion": "1",
+  "result": "pass",
+  "artifacts": {
+    "disk": {
+      "path": "build/disk.qcow2",
+      "sha256": "<lowercase hex>"
+    },
+    "metadata": null,
+    "buildManifest": null
+  },
+  "evidence": [
+    {
+      "role": "checksums",
+      "path": "evidence/checksums.txt",
+      "sha256": "<lowercase hex>",
+      "mediaType": "text/plain"
+    }
+  ]
+}
+```
+
+Contract:
+
+- `schemaVersion` is the manifest contract version. Version 1 is the string
+  `"1"`.
+- `result` exactly matches the validation predicate: `pass` or `fail`.
+- `artifacts.disk` is always present. `artifacts.metadata` and
+  `artifacts.buildManifest` are objects when the corresponding inputs were
+  supplied and `null` otherwise. Each object records the input path and bare
+  lowercase SHA-256.
+- `evidence` is ordered by the stable roles below. Every digest is calculated
+  from the actual file bytes while the manifest is written; files are supplied
+  explicitly by the pipeline rather than discovered by scanning the directory.
+- `attestationUrl` is omitted unless signing completed and returned a URL.
+- The manifest never lists itself and is not added to `checksums.txt`.
+
+| Role                     | Media type                                                  | Present when                        |
+| ------------------------ | ----------------------------------------------------------- | ----------------------------------- |
+| `checksums`              | `text/plain`                                                | Every completed run                 |
+| `sbom`                   | `application/spdx+json` or `application/vnd.cyclonedx+json` | Every completed run                 |
+| `vulnerability-report`   | `application/json`                                          | Every completed run                 |
+| `validation-report`      | `application/json`                                          | Every completed run                 |
+| `validation-predicate`   | `application/vnd.in-toto+json`                              | Every completed run                 |
+| `provenance-attestation` | `application/vnd.dev.sigstore.bundle+json`                  | Passing run with successful signing |
+| `sbom-attestation`       | `application/vnd.dev.sigstore.bundle+json`                  | Passing run with successful signing |
+| `validation-attestation` | `application/vnd.dev.sigstore.bundle+json`                  | Passing run with successful signing |
+
+Paths use the same conventions as the rest of the action: input artifact paths
+are recorded as supplied, and generated evidence paths are the paths written
+under `output-directory`. The manifest contains no combined Incus or Simple
+Streams fingerprint and performs no upload or publication.
 
 ## Attestation bundles
 
@@ -411,14 +479,20 @@ The action fails in two distinct ways:
   run fails with the thrown message and **no output is set**. Evidence on disk
   may be partial or absent.
 - **Evidence-complete failure** — the pipeline runs to completion but the
-  overall `result` is `fail`. All six standard outputs are set, all evidence
+  overall `result` is `fail`. All seven standard outputs are set, all evidence
   files are written, and only then does the run fail. Its message is cataloged
   at the end of this section.
 
 Signing failures are fail-closed aborts that occur after `checksums.txt` is
-sealed: complete unsigned evidence exists on disk, but no output is set. The
-reasoning behind the two taxonomies is in [how-it-works.md](how-it-works.md);
-the operational decision path is in [troubleshooting.md](troubleshooting.md).
+sealed but before `evidence-manifest.json` is written: the pre-manifest unsigned
+evidence exists on disk, but no output is set. The reasoning behind the two
+taxonomies is in [how-it-works.md](how-it-works.md); the operational decision
+path is in [troubleshooting.md](troubleshooting.md).
+
+Manifest hashing or write failures are also fail-closed: the underlying file or
+filesystem error is reported, `evidence-manifest-path` remains unset, and no
+other output is exposed. This can occur if a concurrent process removes or
+changes access to an evidence file before the handoff is sealed.
 
 Placeholders written as `<...>` are interpolated at runtime.
 
@@ -582,8 +656,8 @@ Signing runs only for `signer: github` on a passing result.
 
 ### Evidence-complete failure
 
-This is not an abort. All evidence and all six standard outputs are set, signing
-is skipped, and the run then fails.
+This is not an abort. All evidence and all seven standard outputs are set,
+signing is skipped, and the run then fails.
 
 - `Validation result is "fail"; complete evidence was written to "<output-directory>". Reason: <reasons>.`
 
