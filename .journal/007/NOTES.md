@@ -280,3 +280,28 @@ action-bearing parent commit `9ce3ee4`; the second commit changes only
 but the current CLI token lacks the separate `delete_repo` scope. Both Cosign
 secrets were removed, Actions was disabled, and the private repository was
 archived. The local temporary repository and key material were moved to Trash.
+
+## 2026-07-22 09:17 — Whizlabs AWS KMS canary blocked by lab policy
+
+Built `whzbox` from current main `9851e3b`, authenticated through its
+interactive flow, and created a fresh two-hour AWS sandbox in `us-east-1`.
+Credential-bearing create and list output stayed suppressed. The sandbox
+identity passed STS verification, and read-only KMS and IAM OIDC probes worked.
+
+The sandbox principal was denied `kms:CreateKey` because its Whizlabs-managed
+identity policy does not grant that action. The account's sole existing key is
+an AWS-managed `SYMMETRIC_DEFAULT` encryption key for Cloud9, so it cannot
+satisfy the non-exportable asymmetric `SIGN_VERIFY` exit gate. No KMS, IAM,
+OIDC, or GitHub environment resources were created, and attempting to bypass
+the lab boundary was rejected as unsafe and non-representative.
+
+An old expired sandbox cache was found during startup. Its credentials had
+already expired, and its state file was moved to Trash before fresh login. The
+new sandbox was destroyed after the capability probe; `whzbox list --json` was
+consumed without rendering credentials and confirmed zero cached sandboxes.
+The temporary locally built binary was also moved to Trash.
+
+The live AWS canary remains blocked pending an AWS account or sandbox principal
+that can create an asymmetric KMS key and an exact GitHub OIDC role. PRs #24
+and #25 should remain draft; no implementation or documentation claim changes
+are justified by this failed infrastructure probe.
