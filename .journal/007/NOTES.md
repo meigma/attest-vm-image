@@ -305,3 +305,36 @@ The live AWS canary remains blocked pending an AWS account or sandbox principal
 that can create an asymmetric KMS key and an exact GitHub OIDC role. PRs #24
 and #25 should remain draft; no implementation or documentation claim changes
 are justified by this failed infrastructure probe.
+
+## 2026-07-22 09:34 — Live AWS KMS canary passed and cleaned up
+
+Resumed the blocked canary with the user-authorized `aws-vault exec lab-admin`
+profile. Reused the lab account's existing GitHub OIDC provider, created one
+tagged non-exportable `ECC_NIST_P256` `SIGN_VERIFY` key, and created an exact
+immutable-subject role. Its inline policy allowed only `kms:DescribeKey`,
+`kms:GetPublicKey`, and `kms:Sign` on that key; simulation confirmed
+`kms:Decrypt` and `kms:CreateKey` were denied.
+
+The private repository plan rejected environment protection rules, so the role
+trust was tightened directly to the repository's immutable owner/repository IDs
+and `refs/heads/master`. No AWS credentials were stored in GitHub. Disposable
+workflow commit `8b1613a` invoked exact packaged action commit `ef96979` through
+an external `uses:` reference. Run `29938031012` passed in 3m23s: GitHub OIDC,
+key preflight, three KMS signatures, exported-public-key verification, exact
+eight-role manifest order, v0.3 media types, no URL, zero transparency entries,
+checksums, and validation `result: pass` all succeeded.
+
+Downloaded evidence was then verified independently with local Cosign v3.1.1.
+The workflow public key exactly matched the separately exported trust anchor;
+all three signatures and the full handoff contract passed again. Detailed
+evidence is in `SLICE3_AWS_KMS_CANARY_REPORT.md`. This closes the Slice 3 live
+AWS exit gate. AWS KMS is now field-tested; GCP, Azure, Vault, and OpenBao remain
+URI-contract supported with field testing pending.
+
+The privilege window is closed. Both GitHub ARN secrets and the region variable
+were deleted, Actions was disabled, and the private repository was archived.
+The inline policy and role were deleted. The KMS key was disabled and scheduled
+for deletion with AWS's minimum seven-day window on 2026-07-29. The pre-existing
+OIDC provider was left unchanged. Slice 4 docs commit `17890e7` records the
+narrow status correction after strict docs and the full 262-test gate passed;
+PRs #24 and #25 now carry the exact canary and cleanup evidence.
