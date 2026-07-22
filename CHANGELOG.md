@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.0](https://github.com/meigma/attest-vm-image/compare/v1.0.0...v1.1.0) (2026-07-22)
+
+
+### Features
+
+* add evidence handoff manifest ([#20](https://github.com/meigma/attest-vm-image/issues/20)) ([f6752e7](https://github.com/meigma/attest-vm-image/commit/f6752e7c746309d31593d33e88d108ccb43a4200))
+
 ## [1.0.0](https://github.com/meigma/attest-vm-image/compare/v0.1.0...v1.0.0) (2026-07-22)
 
 
