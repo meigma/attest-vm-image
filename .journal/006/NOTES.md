@@ -51,3 +51,13 @@ Pushed `feat/evidence-manifest` and opened PR #20,
 https://github.com/meigma/attest-vm-image/pull/20. The PR is ready for review and
 mergeable; CI, GitHub Pages, both integration jobs, and Kusari Inspector started
 in progress.
+
+## 2026-07-21 19:43 — Pull request merged
+PR #20 was squash-merged after every hosted check passed on the exact reviewed
+head `61049a6f1d7aa2bd3883aaaeede77e7910cf277f`. The resulting `main` commit is
+`f6752e7c746309d31593d33e88d108ccb43a4200` (`feat: add evidence handoff
+manifest (#20)`).
+
+Fast-forwarded the clean local `main` checkout to the merge commit. Removed the
+integrated `feat/evidence-manifest` Worktrunk worktree and local branch, then
+deleted the remote feature branch. Session 006 remains open for any follow-up.
