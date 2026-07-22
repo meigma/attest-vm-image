@@ -38,7 +38,8 @@ jest.unstable_mockModule('@actions/attest', () => ({
 
 const { selectSigner } = await import('../src/sign/index.js')
 const { GithubSigner } = await import('../src/sign/github.js')
-const { CosignKeySigner } = await import('../src/sign/cosign.js')
+const { CosignKeySigner, SigstoreKeylessSigner } =
+  await import('../src/sign/cosign.js')
 
 // A minimal fake bundle/attestation the mocked library returns.
 const fakeAttestation = (id: string): Attestation =>
@@ -87,7 +88,18 @@ describe('selectSigner', () => {
     )
   })
 
-  it.each(['sigstore-keyless', 'kms'] as const)(
+  it('returns a SigstoreKeylessSigner for "sigstore-keyless"', () => {
+    process.env.GITHUB_SERVER_URL = 'https://github.com'
+    process.env.GITHUB_WORKFLOW_REF =
+      'meigma/attest-vm-image/.github/workflows/integration.yml@refs/heads/test'
+    expect(selectSigner(inputsWith('sigstore-keyless'))).toBeInstanceOf(
+      SigstoreKeylessSigner
+    )
+    delete process.env.GITHUB_SERVER_URL
+    delete process.env.GITHUB_WORKFLOW_REF
+  })
+
+  it.each(['kms'] as const)(
     'throws naming the requested backend for "%s" and never dispatches elsewhere',
     (backend) => {
       let thrown: unknown

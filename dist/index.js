@@ -30208,6 +30208,14 @@ function warning(message, properties = {}) {
     issueCommand('warning', toCommandProperties(properties), message instanceof Error ? message.toString() : message);
 }
 /**
+ * Adds a notice issue
+ * @param message notice issue message. Errors will be converted to string via toString()
+ * @param properties optional properties to add to the annotation.
+ */
+function notice(message, properties = {}) {
+    issueCommand('notice', toCommandProperties(properties), message instanceof Error ? message.toString() : message);
+}
+/**
  * Writes info to log with console.log.
  * @param message info message
  */
@@ -30316,6 +30324,14 @@ function parseInputs() {
             throw new Error('signer "cosign-key" requires the COSIGN_PASSWORD environment variable for the encrypted key.');
         }
         setSecret(password);
+    }
+    if (signer === 'sigstore-keyless') {
+        const oidcRequestUrl = process.env.ACTIONS_ID_TOKEN_REQUEST_URL;
+        const oidcRequestToken = process.env.ACTIONS_ID_TOKEN_REQUEST_TOKEN;
+        if (!oidcRequestUrl || !oidcRequestToken) {
+            throw new Error('signer "sigstore-keyless" requires the job permission id-token: write; the GitHub Actions OIDC request environment is unavailable.');
+        }
+        setSecret(oidcRequestToken);
     }
     const policyPath = getInput('policy-path') || undefined;
     if (policyPath) {
@@ -83430,16 +83446,39 @@ function isUnsupportedPlanError(error) {
 }
 
 const BUNDLE_MEDIA_TYPE = 'application/vnd.dev.sigstore.bundle.v0.3+json';
+const GITHUB_OIDC_ISSUER = 'https://token.actions.githubusercontent.com';
 /** Offline encrypted-key signing with no Fulcio, OIDC, Rekor, or TSA service. */
 class CosignKeySigner {
-    keyReference;
+    signer;
     constructor(keyReference) {
-        this.keyReference = keyReference;
+        this.signer = new CosignSigner({ kind: 'key', keyReference });
+    }
+    sign(ctx) {
+        return this.signer.sign(ctx);
+    }
+}
+/** Public Sigstore signing with the exact GitHub Actions workflow identity. */
+class SigstoreKeylessSigner {
+    signer = new CosignSigner({
+        kind: 'keyless',
+        certificateIdentity: keylessCertificateIdentity()
+    });
+    sign(ctx) {
+        return this.signer.sign(ctx);
+    }
+}
+class CosignSigner {
+    configuration;
+    constructor(configuration) {
+        this.configuration = configuration;
     }
     async sign(ctx) {
-        const password = process.env.COSIGN_PASSWORD;
-        if (!password) {
+        if (this.configuration.kind === 'key' && !process.env.COSIGN_PASSWORD) {
             throw new Error('signer "cosign-key" requires the COSIGN_PASSWORD environment variable for the encrypted key.');
+        }
+        if (this.configuration.kind === 'keyless') {
+            assertKeylessOidcEnvironment();
+            notice('signer "sigstore-keyless" publishes permanent public Sigstore transparency records that disclose the repository, workflow, ref, commit, run, and certificate identity.');
         }
         const cosignDir = await ensureBinary('cosign');
         const cosign = path$2.join(cosignDir, 'cosign');
@@ -83452,33 +83491,15 @@ class CosignKeySigner {
                 throw new Error(`attestation bundle directory "${finalBundleDir}" already exists; refusing to overwrite it.`);
             }, () => undefined);
             await fs$1.promises.mkdir(stagingBundleDir);
-            const configPath = path$2.join(stagingRoot, 'signing-config.json');
-            const publicKeyPath = path$2.join(stagingRoot, 'cosign.pub');
-            await exec(cosign, [
-                'signing-config',
-                'create',
-                '--no-default-fulcio',
-                '--no-default-oidc',
-                '--no-default-rekor',
-                '--no-default-tsa',
-                '--out',
-                configPath
-            ], {
-                displayLabel: 'cosign signing-config create (no services)',
-                silent: true
-            });
-            await exec(cosign, ['public-key', '--key', this.keyReference, '--outfile', publicKeyPath], {
-                displayLabel: 'cosign public-key --key [REDACTED]',
-                silent: true,
-                redactStderr: true
-            });
+            const keyMaterial = this.configuration.kind === 'key'
+                ? await this.prepareKeyMaterial(cosign, stagingRoot)
+                : undefined;
             for (const item of statements) {
                 await this.signAndVerify({
                     cosign,
                     ctx,
                     item,
-                    configPath,
-                    publicKeyPath,
+                    keyMaterial,
                     stagingRoot,
                     stagingBundleDir
                 });
@@ -83496,61 +83517,110 @@ class CosignKeySigner {
             await fs$1.promises.rm(stagingRoot, { recursive: true, force: true });
         }
     }
-    async signAndVerify(options) {
-        const { cosign, ctx, item, configPath, publicKeyPath } = options;
-        const statementPath = path$2.join(options.stagingRoot, `${item.role}.json`);
-        const bundlePath = path$2.join(options.stagingBundleDir, item.filename);
-        await fs$1.promises.writeFile(statementPath, JSON.stringify(item.statement, null, 2));
+    async prepareKeyMaterial(cosign, stagingRoot) {
+        if (this.configuration.kind !== 'key') {
+            throw new Error('internal error: key material requested for keyless signing');
+        }
+        const configPath = path$2.join(stagingRoot, 'signing-config.json');
+        const publicKeyPath = path$2.join(stagingRoot, 'cosign.pub');
         await exec(cosign, [
-            'attest-blob',
-            '--statement',
-            statementPath,
-            '--key',
-            this.keyReference,
-            '--bundle',
-            bundlePath,
-            '--signing-config',
-            configPath,
-            '--yes'
+            'signing-config',
+            'create',
+            '--no-default-fulcio',
+            '--no-default-oidc',
+            '--no-default-rekor',
+            '--no-default-tsa',
+            '--out',
+            configPath
         ], {
-            displayLabel: `cosign attest-blob (${item.role}, key [REDACTED])`,
+            displayLabel: 'cosign signing-config create (no services)',
+            silent: true
+        });
+        await exec(cosign, [
+            'public-key',
+            '--key',
+            this.configuration.keyReference,
+            '--outfile',
+            publicKeyPath
+        ], {
+            displayLabel: 'cosign public-key --key [REDACTED]',
             silent: true,
             redactStderr: true
         });
-        await assertBundle(bundlePath, item.statement);
-        await exec(cosign, [
-            'verify-blob-attestation',
-            '--bundle',
-            bundlePath,
-            '--key',
-            publicKeyPath,
-            '--insecure-ignore-tlog',
-            '--digest',
-            ctx.disk.sha256,
-            '--digestAlg',
-            'sha256',
-            '--type',
-            item.predicateType
-        ], {
+        return { configPath, publicKeyPath };
+    }
+    async signAndVerify(options) {
+        const { cosign, ctx, item, keyMaterial } = options;
+        const statementPath = path$2.join(options.stagingRoot, `${item.role}.json`);
+        const bundlePath = path$2.join(options.stagingBundleDir, item.filename);
+        await fs$1.promises.writeFile(statementPath, JSON.stringify(item.statement, null, 2));
+        const signArgs = ['attest-blob', '--statement', statementPath];
+        if (this.configuration.kind === 'key') {
+            if (!keyMaterial) {
+                throw new Error('internal error: encrypted-key signing material is missing');
+            }
+            signArgs.push('--key', this.configuration.keyReference, '--signing-config', keyMaterial.configPath);
+        }
+        else {
+            signArgs.push('--oidc-provider', 'github-actions');
+        }
+        signArgs.push('--bundle', bundlePath, '--yes');
+        await exec(cosign, signArgs, {
+            displayLabel: this.configuration.kind === 'key'
+                ? `cosign attest-blob (${item.role}, key [REDACTED])`
+                : `cosign attest-blob (${item.role}, GitHub Actions OIDC)`,
+            silent: true,
+            redactStderr: this.configuration.kind === 'key'
+        });
+        await assertBundle(bundlePath, item.statement, this.configuration.kind);
+        const verifyArgs = ['verify-blob-attestation', '--bundle', bundlePath];
+        if (this.configuration.kind === 'key') {
+            if (!keyMaterial) {
+                throw new Error('internal error: encrypted-key verification material is missing');
+            }
+            verifyArgs.push('--key', keyMaterial.publicKeyPath, '--insecure-ignore-tlog');
+        }
+        else {
+            verifyArgs.push('--certificate-identity', this.configuration.certificateIdentity, '--certificate-oidc-issuer', GITHUB_OIDC_ISSUER);
+        }
+        verifyArgs.push('--digest', ctx.disk.sha256, '--digestAlg', 'sha256', '--type', item.predicateType);
+        await exec(cosign, verifyArgs, {
             displayLabel: `cosign verify-blob-attestation (${item.role})`,
             silent: true
         });
     }
 }
-async function assertBundle(bundlePath, intendedStatement) {
+function keylessCertificateIdentity() {
+    const serverUrl = process.env.GITHUB_SERVER_URL;
+    const workflowRef = process.env.GITHUB_WORKFLOW_REF;
+    if (!serverUrl || !workflowRef) {
+        throw new Error('signer "sigstore-keyless" requires GITHUB_SERVER_URL and GITHUB_WORKFLOW_REF to construct its exact certificate identity.');
+    }
+    return `${serverUrl}/${workflowRef}`;
+}
+function assertKeylessOidcEnvironment() {
+    if (!process.env.ACTIONS_ID_TOKEN_REQUEST_URL ||
+        !process.env.ACTIONS_ID_TOKEN_REQUEST_TOKEN) {
+        throw new Error('signer "sigstore-keyless" requires the job permission id-token: write; the GitHub Actions OIDC request environment is unavailable.');
+    }
+}
+async function assertBundle(bundlePath, intendedStatement, signerKind) {
     const bundle = JSON.parse(await fs$1.promises.readFile(bundlePath, 'utf8'));
     if (bundle.mediaType !== BUNDLE_MEDIA_TYPE) {
         throw new Error(`Cosign produced an unexpected bundle media type.`);
     }
-    // Sigstore bundle JSON omits empty repeated fields, so v0.3 key-backed
-    // bundles may carry no `tlogEntries` property at all. Omitted and [] both
-    // mean zero entries; any present non-array value or non-empty array violates
-    // this backend's explicit no-transparency contract.
     const tlogEntries = bundle.verificationMaterial?.tlogEntries;
-    if (tlogEntries !== undefined && !Array.isArray(tlogEntries)) {
+    // Sigstore bundle JSON omits empty repeated fields, so a key-backed v0.3
+    // bundle may carry no `tlogEntries` property. Omitted and [] both mean zero.
+    if (signerKind === 'keyless') {
+        if (!Array.isArray(tlogEntries) || tlogEntries.length !== 1) {
+            throw new Error('Cosign keyless bundle is missing its required public transparency-log entry.');
+        }
+    }
+    else if (tlogEntries !== undefined && !Array.isArray(tlogEntries)) {
         throw new Error('Cosign bundle has invalid transparency-log metadata.');
     }
-    if (Array.isArray(tlogEntries) && tlogEntries.length !== 0) {
+    else if (Array.isArray(tlogEntries) && tlogEntries.length !== 0) {
         throw new Error('Cosign unexpectedly published transparency-log material for signer "cosign-key".');
     }
     if (typeof bundle.dsseEnvelope?.payload !== 'string') {
@@ -83564,10 +83634,9 @@ async function assertBundle(bundlePath, intendedStatement) {
 
 /**
  * Select the signing backend named by `inputs.signer`. Returns `null` for
- * `none` (no signing) and a `GithubSigner` for `github`. Every other value is a
- * post-v1 extension point that is not yet implemented: dispatch throws a
- * diagnostic naming the requested backend and NEVER falls back to a different
- * one, so a caller can never silently get a signer they did not ask for.
+ * `none` (no signing) and the exact requested implementation for each supported
+ * backend. Unimplemented values throw a diagnostic naming the requested backend
+ * and NEVER fall back, so a caller cannot silently get a different signer.
  */
 function selectSigner(inputs) {
     switch (inputs.signer) {
@@ -83575,12 +83644,14 @@ function selectSigner(inputs) {
             return null;
         case 'github':
             return new GithubSigner(inputs.githubToken);
+        case 'sigstore-keyless':
+            return new SigstoreKeylessSigner();
         case 'cosign-key':
             return new CosignKeySigner(inputs.signingKey);
         default:
             throw new Error(`signer "${inputs.signer}" is not yet implemented. This release supports ` +
-                '"none", "github", and "cosign-key"; the remaining external backends ' +
-                '(sigstore-keyless and kms) are later extension points, ' +
+                '"none", "github", "sigstore-keyless", and "cosign-key"; the remaining ' +
+                'external backend (kms) is a later extension point, ' +
                 'and this action never falls back to a different backend.');
     }
 }

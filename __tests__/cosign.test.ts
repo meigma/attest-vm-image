@@ -9,6 +9,7 @@ import {
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import * as core from '../__fixtures__/core.js'
 import type { ExecResult } from '../src/exec.js'
 import { PREDICATE_TYPE, STATEMENT_TYPE } from '../src/predicate.js'
 import type { Statement } from '../src/predicate.js'
@@ -21,8 +22,10 @@ const ensureBinary = jest.fn<(name: string) => Promise<string>>()
 
 jest.unstable_mockModule('../src/exec.js', () => ({ exec }))
 jest.unstable_mockModule('../src/tools.js', () => ({ ensureBinary }))
+jest.unstable_mockModule('@actions/core', () => core)
 
-const { CosignKeySigner } = await import('../src/sign/cosign.js')
+const { CosignKeySigner, SigstoreKeylessSigner } =
+  await import('../src/sign/cosign.js')
 
 const DISK_SHA = 'a'.repeat(64)
 const SBOM_SHA = 'b'.repeat(64)
@@ -39,6 +42,9 @@ const REQUIRED_ENV = {
   GITHUB_WORKFLOW_REF:
     'meigma/attest-vm-image/.github/workflows/test.yml@refs/heads/test',
   RUNNER_ENVIRONMENT: 'github-hosted',
+  ACTIONS_ID_TOKEN_REQUEST_URL:
+    'https://token.actions.githubusercontent.com/request',
+  ACTIONS_ID_TOKEN_REQUEST_TOKEN: 'oidc-request-token',
   COSIGN_PASSWORD: 'password'
 }
 
@@ -212,5 +218,62 @@ describe('CosignKeySigner', () => {
       new CosignKeySigner('/secret/cosign.key').sign(context())
     ).rejects.toThrow(/unexpectedly published transparency-log material/)
     expect(existsSync(join(dir, 'attestations'))).toBe(false)
+  })
+
+  it('signs and verifies three keyless bundles with exact identity and issuer', async () => {
+    installSuccessfulExecMock([{ logIndex: '1' }])
+
+    const result = await new SigstoreKeylessSigner().sign(context())
+
+    expect(result.bundles).toHaveLength(3)
+    expect(result.attestationUrl).toBeUndefined()
+    expect(core.notice).toHaveBeenCalledWith(
+      expect.stringContaining('permanent public Sigstore transparency records')
+    )
+    const signCalls = exec.mock.calls.filter(
+      ([, args]) => args?.[0] === 'attest-blob'
+    )
+    expect(signCalls).toHaveLength(3)
+    for (const [, args] of signCalls) {
+      expect(args).toEqual(
+        expect.arrayContaining(['--oidc-provider', 'github-actions'])
+      )
+      expect(args).not.toContain('--key')
+      expect(args).not.toContain('--signing-config')
+    }
+    const verifyCalls = exec.mock.calls.filter(
+      ([, args]) => args?.[0] === 'verify-blob-attestation'
+    )
+    expect(verifyCalls).toHaveLength(3)
+    for (const [, args] of verifyCalls) {
+      expect(args).toEqual(
+        expect.arrayContaining([
+          '--certificate-identity',
+          'https://github.com/meigma/attest-vm-image/.github/workflows/test.yml@refs/heads/test',
+          '--certificate-oidc-issuer',
+          'https://token.actions.githubusercontent.com'
+        ])
+      )
+      expect(args).not.toContain('--insecure-ignore-tlog')
+    }
+  })
+
+  it('rejects keyless bundles without a public transparency entry', async () => {
+    installSuccessfulExecMock()
+
+    await expect(new SigstoreKeylessSigner().sign(context())).rejects.toThrow(
+      /missing its required public transparency-log entry/
+    )
+    expect(existsSync(join(dir, 'attestations'))).toBe(false)
+  })
+
+  it('preflights keyless OIDC before downloading Cosign', async () => {
+    delete process.env.ACTIONS_ID_TOKEN_REQUEST_TOKEN
+
+    await expect(new SigstoreKeylessSigner().sign(context())).rejects.toThrow(
+      /requires the job permission id-token: write/
+    )
+    expect(ensureBinary).not.toHaveBeenCalled()
+    expect(exec).not.toHaveBeenCalled()
   })
 })

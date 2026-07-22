@@ -205,11 +205,11 @@ behavior, not a defect, on any run whose result was `fail`. See the
 [troubleshooting guide](troubleshooting.md) for spotting it in a log.
 
 The same principle explains why there is no signer fallback. When you ask for a
-signer the action cannot provide — `sigstore-keyless` or `kms`, or `github` on a
-repository whose plan cannot issue attestations — the action fails with a named
-cause and never quietly signs with something else or drops to unsigned output.
-The choice of signer is a trust decision that only the caller can legitimately
-make. Silently downgrading it would hand you an artifact signed by a method or
+signer the action cannot provide — currently `kms`, or `github` on a repository
+whose plan cannot issue attestations — the action fails with a named cause and
+never quietly signs with something else or drops to unsigned output. The choice
+of signer is a trust decision that only the caller can legitimately make.
+Silently downgrading it would hand you an artifact signed by a method or
 identity you did not choose, or leave you believing something was signed when it
 was not. A hard failure is the honest outcome; the
 [permissions](reference.md#permissions) reference lays out exactly what

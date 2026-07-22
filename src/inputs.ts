@@ -144,6 +144,16 @@ export function parseInputs(): Inputs {
     }
     core.setSecret(password)
   }
+  if (signer === 'sigstore-keyless') {
+    const oidcRequestUrl = process.env.ACTIONS_ID_TOKEN_REQUEST_URL
+    const oidcRequestToken = process.env.ACTIONS_ID_TOKEN_REQUEST_TOKEN
+    if (!oidcRequestUrl || !oidcRequestToken) {
+      throw new Error(
+        'signer "sigstore-keyless" requires the job permission id-token: write; the GitHub Actions OIDC request environment is unavailable.'
+      )
+    }
+    core.setSecret(oidcRequestToken)
+  }
 
   const policyPath = core.getInput('policy-path') || undefined
   if (policyPath) {

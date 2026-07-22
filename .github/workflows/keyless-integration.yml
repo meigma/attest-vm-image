@@ -1,0 +1,148 @@
+name: Keyless integration
+
+# Keyless signing creates permanent public transparency entries. Run this smoke
+# only when a maintainer deliberately applies the integration:keyless label to
+# a same-repository pull request. A new commit requires removing and reapplying
+# the label, so publication never happens merely because a branch was pushed.
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - labeled
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  missing-oidc:
+    if: >-
+      ${{ github.event.label.name == 'integration:keyless' &&
+      github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout trusted same-repository pull request
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Assert missing id-token permission fails before disk access
+        run: |
+          set +e
+          output="$({
+            env \
+              'INPUT_DISK-PATH=does-not-exist.qcow2' \
+              'INPUT_SIGNER=sigstore-keyless' \
+              node dist/index.js
+          } 2>&1)"
+          status=$?
+          set -e
+
+          test "$status" -ne 0 || {
+            echo 'keyless action unexpectedly succeeded without OIDC' >&2
+            exit 1
+          }
+          grep -F \
+            'signer "sigstore-keyless" requires the job permission id-token: write' \
+            <<<"$output" >/dev/null
+
+  keyless:
+    if: >-
+      ${{ github.event.label.name == 'integration:keyless' &&
+      github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout trusted same-repository pull request
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install libguestfs and qemu for test-image creation
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends qemu-utils libguestfs-tools
+          sudo chmod +r /boot/vmlinuz-*
+
+      - name: Create the seeded QCOW2 test image
+        env:
+          LIBGUESTFS_BACKEND: direct
+        run: .github/scripts/make-test-image.sh disk.qcow2
+
+      - name: Run action with public Sigstore keyless signing
+        id: keyless
+        uses: ./
+        with:
+          disk-path: disk.qcow2
+          output-directory: ./evidence-keyless
+          fail-on-severity: none
+          signer: sigstore-keyless
+
+      - name: Install Cosign for independent verification
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        with:
+          cosign-release: v3.1.2
+
+      - name: Verify exact keyless identity and public transparency
+        run: |
+          set -euo pipefail
+          dir=evidence-keyless/attestations
+          hex="$(sha256sum disk.qcow2 | awk '{print $1}')"
+          identity="${GITHUB_SERVER_URL}/${GITHUB_WORKFLOW_REF}"
+          issuer='https://token.actions.githubusercontent.com'
+
+          test '${{ steps.keyless.outputs.attestation-bundle-path }}' = "$dir"
+          test -z '${{ steps.keyless.outputs.attestation-url }}'
+          jq -e 'has("attestationUrl") | not' \
+            evidence-keyless/evidence-manifest.json >/dev/null
+
+          verify() {
+            bundle="$1"
+            predicate_type="$2"
+            jq -e '.mediaType == "application/vnd.dev.sigstore.bundle.v0.3+json"' \
+              "$bundle" >/dev/null
+            jq -e '(.verificationMaterial.tlogEntries | length) == 1' \
+              "$bundle" >/dev/null
+            cosign verify-blob-attestation \
+              --bundle "$bundle" \
+              --certificate-identity "$identity" \
+              --certificate-oidc-issuer "$issuer" \
+              --digest "$hex" --digestAlg sha256 \
+              --type "$predicate_type"
+          }
+
+          verify "$dir/provenance.sigstore.json" \
+            'https://slsa.dev/provenance/v1'
+          verify "$dir/sbom.sigstore.json" \
+            'https://spdx.dev/Document/v2.3'
+          verify "$dir/validation.sigstore.json" \
+            'https://meigma.github.io/attest-vm-image/predicate/vm-image-validation/v1'
+
+          if cosign verify-blob-attestation \
+            --bundle "$dir/validation.sigstore.json" \
+            --certificate-identity 'https://github.com/wrong/workflow' \
+            --certificate-oidc-issuer "$issuer" \
+            --digest "$hex" --digestAlg sha256 \
+            --type 'https://meigma.github.io/attest-vm-image/predicate/vm-image-validation/v1'; then
+            echo 'wrong keyless identity unexpectedly verified' >&2
+            exit 1
+          fi
+
+          if cosign verify-blob-attestation \
+            --bundle "$dir/validation.sigstore.json" \
+            --certificate-identity "$identity" \
+            --certificate-oidc-issuer 'https://issuer.invalid' \
+            --digest "$hex" --digestAlg sha256 \
+            --type 'https://meigma.github.io/attest-vm-image/predicate/vm-image-validation/v1'; then
+            echo 'wrong keyless issuer unexpectedly verified' >&2
+            exit 1
+          fi
