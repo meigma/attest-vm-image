@@ -362,3 +362,30 @@ one-time disposable acceptance proof, explicitly avoid a recurring cloud-CI
 promise, and retain this report as historical evidence. Future live provider
 revalidation will be a fresh disposable exercise when a suitable account is
 available.
+
+## 2026-07-22 10:18 — Signing backend stack merged
+
+With explicit approval to land the complete dependency chain, squash-merged
+PRs #22 through #25 to `main` in order. Each child branch was replayed onto the
+new squash-merged parent and proven tree-identical to its reviewed head before
+force-push. The rewritten exact heads and resulting main commits were:
+
+- PR #22: reviewed `5f8963f`, merged as `ef6189c`;
+- PR #23: green restacked head `a74301e`, merged as `5f871a2`;
+- PR #24: green same-tree head `d5675fd`, merged as `b3472cf`; and
+- PR #25: green restacked head `cc89a18`, merged as `f3a6be1`.
+
+Every restacked PR passed its complete main-targeted hosted gate before merge:
+CI, GitHub Pages, Kusari Inspector, image construction, and signing integration.
+The final main tree is byte-identical to the reviewed Slice 4 tree at `893e351`
+and still omits `.github/workflows/kms-integration.yml`.
+
+Fast-forwarded the root checkout to `f3a6be1`, removed all four integrated
+implementation worktrees and local branches, and deleted their remote branches.
+The personal journal worktree remains intact. A root-check attempt from the
+repository root showed that ESLint and Jest traverse the nested `.wt/` journal
+worktree; this exceeds typescript-eslint's default-project file limit and is an
+environment/layout artifact rather than a merged-tree failure. A clean temporary
+Git archive of exact main, initialized only so `check-dist` could compare Git
+state, passed `moon run root:check` with all 262 tests. The temporary archive was
+moved to Trash afterward.
