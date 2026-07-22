@@ -13,10 +13,10 @@ export interface ChecksumsInput {
    */
   extraInputs: string[]
   /**
-   * Unsigned evidence files to cover (SBOM, vulnerability report, validation
-   * report, validation predicate). Attestation bundles are deliberately
-   * excluded — they are written after this stage and carry their own
-   * verification material.
+   * Pre-manifest unsigned evidence files to cover (SBOM, vulnerability report,
+   * validation report, validation predicate). Attestation bundles and the
+   * evidence manifest are deliberately excluded because they are written after
+   * this stage.
    */
   evidenceFiles: string[]
   /** Path the `checksums.txt` file is written to. */
@@ -32,7 +32,7 @@ function line(hex: string, filePath: string): string {
 
 /**
  * Write a `sha256sum -c`-compatible `checksums.txt` covering the input disk,
- * optional extra inputs, and every unsigned evidence file.
+ * optional extra inputs, and every pre-manifest unsigned evidence file.
  *
  * The input disk is re-digested **first**; if the digest differs from
  * `expectedDiskSha256` (the stage-2 value), the run's read-only guarantee was

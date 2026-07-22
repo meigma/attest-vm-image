@@ -97,9 +97,12 @@ disk, by role:
 The signed Sigstore bundles are written under the evidence directory (default
 `./evidence`, or your `output-directory`), and two extra outputs are set:
 `attestation-bundle-path` (the bundle directory) and `attestation-url` (the
-validation attestation). Exact filenames, predicate-type URIs, and subjects are
-in [reference](reference.md#attestation-bundles); the output set-conditions are
-in [reference](reference.md#outputs).
+validation attestation). The ordinary `evidence-manifest-path` output points to
+the single handoff document, whose evidence list now includes all three bundles
+and whose `attestationUrl` matches the validation URL. Exact filenames,
+predicate-type URIs, and subjects are in
+[reference](reference.md#attestation-bundles); the output set-conditions are in
+[reference](reference.md#outputs).
 
 ## Verification
 
@@ -124,22 +127,22 @@ For the full decision path and exact diagnostic strings, see
 
 ### Nothing was signed, and the attestation outputs are empty
 
-Two different situations produce this. Both leave the same complete unsigned
-evidence on disk — checksums.txt and every report and predicate file already
-exist by the time signing runs — so they differ only in which outputs are set:
+Two different situations produce this. They differ in both the handoff file and
+the outputs:
 
 - **The validation result was `fail`.** A failing result is never signed. The
-  action writes complete unsigned evidence, skips signing, and then fails the
-  run; the six standard evidence outputs are still populated, but
-  `attestation-bundle-path` and `attestation-url` stay unset. Fix the image (or
-  adjust `fail-on-severity`, see
+  action writes complete unsigned evidence, including a manifest whose result is
+  `fail`, skips signing, and then fails the run; the seven standard evidence
+  outputs are still populated, but `attestation-bundle-path` and
+  `attestation-url` stay unset. Fix the image (or adjust `fail-on-severity`, see
   [Control what fails validation](validation-policy.md)) so the result passes.
   For why a failing result is never signed, see
   [how-it-works.md](how-it-works.md).
 - **Signing itself threw.** Signing is a fail-closed abort: on any signing
-  error, no output is set — not even the six non-attestation outputs — even
-  though complete unsigned evidence was already written. Read the run's failure
-  message and match it below.
+  error, `evidence-manifest.json` is not written and no output is set — not even
+  the seven non-attestation outputs — although the checksum manifest, reports,
+  and predicate already exist. Read the run's failure message and match it
+  below.
 
 ### The run failed with a plan or visibility error
 

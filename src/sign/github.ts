@@ -109,7 +109,24 @@ export class GithubSigner implements Signer {
     const validationUrl = attestationUrl(validation.attestationID)
     core.info(`validation attestation: ${validationUrl}`)
 
-    return { bundleDir, attestationUrl: validationUrl }
+    return {
+      bundleDir,
+      bundles: [
+        {
+          role: 'provenance-attestation',
+          path: path.join(bundleDir, PROVENANCE_BUNDLE)
+        },
+        {
+          role: 'sbom-attestation',
+          path: path.join(bundleDir, SBOM_BUNDLE)
+        },
+        {
+          role: 'validation-attestation',
+          path: path.join(bundleDir, VALIDATION_BUNDLE)
+        }
+      ],
+      attestationUrl: validationUrl
+    }
   }
 
   /**

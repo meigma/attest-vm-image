@@ -16,6 +16,9 @@ import type { PredicateState } from './predicate.js'
 import { writeChecksums } from './checksums.js'
 import { CleanupRegistry } from './cleanup.js'
 import { selectSigner } from './sign/index.js'
+import type { SignResult } from './sign/types.js'
+import { EVIDENCE_MEDIA_TYPES, writeEvidenceManifest } from './manifest.js'
+import type { EvidenceSource } from './manifest.js'
 import type { SbomFormat } from './inputs.js'
 
 /**
@@ -28,7 +31,8 @@ export const OUTPUT_FILES = {
   sbomCyclonedx: 'sbom.cyclonedx.json',
   vulnerabilityReport: 'vulnerability-report.json',
   validationReport: 'validation-report.json',
-  validationPredicate: 'validation-predicate.json'
+  validationPredicate: 'validation-predicate.json',
+  evidenceManifest: 'evidence-manifest.json'
 } as const
 
 // The SBOM basename for a given format.
@@ -63,6 +67,7 @@ export async function run(): Promise<void> {
     const reportPath = path.join(outDir, OUTPUT_FILES.validationReport)
     const predicatePath = path.join(outDir, OUTPUT_FILES.validationPredicate)
     const checksumsPath = path.join(outDir, OUTPUT_FILES.checksums)
+    const manifestPath = path.join(outDir, OUTPUT_FILES.evidenceManifest)
 
     // Build-manifest digest, computed right after stage 1 when provided.
     const buildManifest = inputs.buildManifestPath
@@ -139,6 +144,7 @@ export async function run(): Promise<void> {
     // A failing result is never signed (design): the unsigned evidence is
     // written in full, signing is skipped with a notice, and the action then
     // fails on the evidence-complete result below.
+    let signResult: SignResult | undefined
     if (inputs.signer === 'none') {
       core.info('signer is "none"; skipping attestation (unsigned evidence).')
     } else if (result === 'pass') {
@@ -146,7 +152,7 @@ export async function run(): Promise<void> {
       // throws a named diagnostic (a fail-closed abort inside this try).
       const signer = selectSigner(inputs)
       if (signer) {
-        const signResult = await signer.sign({
+        signResult = await signer.sign({
           disk: { path: inputs.diskPath, sha256: disk.sha256 },
           metadata:
             metadata && inputs.metadataPath
@@ -156,8 +162,6 @@ export async function run(): Promise<void> {
           statement,
           outputDir: outDir
         })
-        core.setOutput('attestation-bundle-path', signResult.bundleDir)
-        core.setOutput('attestation-url', signResult.attestationUrl)
       }
     } else {
       core.info(
@@ -167,14 +171,82 @@ export async function run(): Promise<void> {
       )
     }
 
-    // Set every non-signing output. Attestation outputs are set only when a
-    // signer runs (a passing result with a non-"none" signer).
+    // Stage 11: write the single downstream handoff from explicit pipeline
+    // state. It is deliberately written after signing so successful bundles
+    // are included, and after checksums so that contract remains unchanged.
+    const evidence: EvidenceSource[] = [
+      {
+        role: 'checksums',
+        path: checksumsPath,
+        mediaType: EVIDENCE_MEDIA_TYPES.checksums
+      },
+      {
+        role: 'sbom',
+        path: sbom.path,
+        mediaType:
+          sbom.format === 'cyclonedx-json'
+            ? EVIDENCE_MEDIA_TYPES.cyclonedx
+            : EVIDENCE_MEDIA_TYPES.spdx
+      },
+      {
+        role: 'vulnerability-report',
+        path: vuln.path,
+        mediaType: EVIDENCE_MEDIA_TYPES.json
+      },
+      {
+        role: 'validation-report',
+        path: reportPath,
+        mediaType: EVIDENCE_MEDIA_TYPES.json
+      },
+      {
+        role: 'validation-predicate',
+        path: predicatePath,
+        mediaType: EVIDENCE_MEDIA_TYPES.inToto
+      },
+      ...(signResult?.bundles.map((bundle) => ({
+        ...bundle,
+        mediaType: EVIDENCE_MEDIA_TYPES.sigstoreBundle
+      })) ?? [])
+    ]
+    await writeEvidenceManifest({
+      outputPath: manifestPath,
+      result,
+      artifacts: {
+        disk: { path: inputs.diskPath, sha256: disk.sha256 },
+        ...(metadata && inputs.metadataPath
+          ? {
+              metadata: {
+                path: inputs.metadataPath,
+                sha256: metadata.sha256
+              }
+            }
+          : {}),
+        ...(buildManifest && inputs.buildManifestPath
+          ? {
+              buildManifest: {
+                path: inputs.buildManifestPath,
+                sha256: buildManifest.sha256
+              }
+            }
+          : {})
+      },
+      evidence,
+      ...(signResult ? { attestationUrl: signResult.attestationUrl } : {})
+    })
+
+    // Set outputs only after the full handoff has been written. Attestation
+    // outputs are set only when a signer completed on a passing result.
+    if (signResult) {
+      core.setOutput('attestation-bundle-path', signResult.bundleDir)
+      core.setOutput('attestation-url', signResult.attestationUrl)
+    }
     core.setOutput('disk-digest', `sha256:${disk.sha256}`)
     core.setOutput('checksums-path', checksumsPath)
     core.setOutput('sbom-path', sbom.path)
     core.setOutput('vulnerability-report-path', vuln.path)
     core.setOutput('validation-report-path', reportPath)
     core.setOutput('validation-predicate-path', predicatePath)
+    core.setOutput('evidence-manifest-path', manifestPath)
 
     // Evidence-complete failure: the pipeline finished and wrote full evidence,
     // but the image did not pass. This is distinct from the fail-closed aborts

@@ -24,9 +24,9 @@ identity signed it.
 ## Usage
 
 The default `signer: none` mode writes checksums, the SBOM, the vulnerability
-and validation reports, and the validation predicate without signing, and needs
-only `contents: read`. Once an earlier step in the job has built your image, add
-the action:
+and validation reports, the validation predicate, and a versioned evidence
+manifest without signing, and needs only `contents: read`. Once an earlier step
+in the job has built your image, add the action:
 
 ```yaml
 jobs:

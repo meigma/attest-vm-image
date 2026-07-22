@@ -49,7 +49,7 @@ from `vulnerability-report.json` in the evidence directory (for example
 
 A threshold breach is not the same as a scan error, and `fail-on-severity` only
 governs the former. A clean scan whose findings meet the threshold writes the
-full `vulnerability-report.json`, sets its six standard outputs, and fails the
+full `vulnerability-report.json`, sets its seven standard outputs, and fails the
 run afterward (an evidence-complete failure) — lowering the gate to
 `fail-on-severity: none` keeps that run green while still recording the
 findings. A Grype crash, non-zero exit, empty output, or unparseable JSON is a

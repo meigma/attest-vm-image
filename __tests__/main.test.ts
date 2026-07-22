@@ -135,6 +135,20 @@ const sign = jest.fn(async () => {
   calls.push('sign')
   return {
     bundleDir: '/evidence/attestations',
+    bundles: [
+      {
+        role: 'provenance-attestation' as const,
+        path: '/evidence/attestations/provenance.sigstore.json'
+      },
+      {
+        role: 'sbom-attestation' as const,
+        path: '/evidence/attestations/sbom.sigstore.json'
+      },
+      {
+        role: 'validation-attestation' as const,
+        path: '/evidence/attestations/validation.sigstore.json'
+      }
+    ],
     attestationUrl: 'https://github.com/meigma/attest-vm-image/attestations/42'
   }
 })
@@ -145,6 +159,10 @@ const selectSigner = jest.fn((inputs: Inputs) =>
 const mkdir = jest.fn(async () => {
   calls.push('mkdir')
   return undefined
+})
+
+const writeEvidenceManifest = jest.fn(async () => {
+  calls.push('writeEvidenceManifest')
 })
 
 jest.unstable_mockModule('@actions/core', () => core)
@@ -169,6 +187,17 @@ jest.unstable_mockModule('../src/predicate.js', () => ({ writeEvidence }))
 jest.unstable_mockModule('../src/checksums.js', () => ({ writeChecksums }))
 jest.unstable_mockModule('../src/cleanup.js', () => ({ CleanupRegistry }))
 jest.unstable_mockModule('../src/sign/index.js', () => ({ selectSigner }))
+jest.unstable_mockModule('../src/manifest.js', () => ({
+  EVIDENCE_MEDIA_TYPES: {
+    checksums: 'text/plain',
+    spdx: 'application/spdx+json',
+    cyclonedx: 'application/vnd.cyclonedx+json',
+    json: 'application/json',
+    inToto: 'application/vnd.in-toto+json',
+    sigstoreBundle: 'application/vnd.dev.sigstore.bundle+json'
+  },
+  writeEvidenceManifest
+}))
 jest.unstable_mockModule('node:fs', () => ({
   promises: { mkdir }
 }))
@@ -248,8 +277,21 @@ describe('main.ts orchestration', () => {
       'toolVersions',
       'writeEvidence',
       'writeChecksums',
+      'writeEvidenceManifest',
       'drain'
     ])
+    expect(writeEvidenceManifest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        artifacts: {
+          disk: { path: 'build/disk.qcow2', sha256: 'a'.repeat(64) },
+          metadata: { path: 'meta.tar.gz', sha256: 'b'.repeat(64) },
+          buildManifest: {
+            path: 'manifest.json',
+            sha256: 'manifestsha'
+          }
+        }
+      })
+    )
     expect(core.setFailed).not.toHaveBeenCalled()
   })
 
@@ -266,7 +308,8 @@ describe('main.ts orchestration', () => {
       'sbom-path',
       'vulnerability-report-path',
       'validation-report-path',
-      'validation-predicate-path'
+      'validation-predicate-path',
+      'evidence-manifest-path'
     ])
     // No attestation outputs and no signing in signer:none.
     expect(outputNames()).not.toContain('attestation-bundle-path')
@@ -278,6 +321,13 @@ describe('main.ts orchestration', () => {
     await run()
     expect(validateMetadata).not.toHaveBeenCalled()
     expect(sha256File).not.toHaveBeenCalled()
+    expect(writeEvidenceManifest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        artifacts: {
+          disk: { path: 'build/disk.qcow2', sha256: 'a'.repeat(64) }
+        }
+      })
+    )
   })
 
   it('drains the cleanup registry on a successful run', async () => {
@@ -310,8 +360,12 @@ describe('main.ts orchestration', () => {
     // Evidence and checksums were written before the failure.
     expect(writeEvidence).toHaveBeenCalledTimes(1)
     expect(writeChecksums).toHaveBeenCalledTimes(1)
+    expect(writeEvidenceManifest).toHaveBeenCalledWith(
+      expect.objectContaining({ result: 'fail' })
+    )
     // Outputs are still set.
     expect(outputNames()).toContain('validation-predicate-path')
+    expect(outputNames()).toContain('evidence-manifest-path')
     // The distinct, evidence-complete failure message (not a fail-closed abort).
     expect(core.setFailed).toHaveBeenCalledTimes(1)
     const msg = core.setFailed.mock.calls[0][0] as string
@@ -364,6 +418,20 @@ describe('main.ts orchestration', () => {
     expect(calls.indexOf('sign')).toBeGreaterThan(
       calls.indexOf('writeChecksums')
     )
+    expect(calls.indexOf('writeEvidenceManifest')).toBeGreaterThan(
+      calls.indexOf('sign')
+    )
+    expect(writeEvidenceManifest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        attestationUrl:
+          'https://github.com/meigma/attest-vm-image/attestations/42',
+        evidence: expect.arrayContaining([
+          expect.objectContaining({ role: 'provenance-attestation' }),
+          expect.objectContaining({ role: 'sbom-attestation' }),
+          expect.objectContaining({ role: 'validation-attestation' })
+        ])
+      })
+    )
     expect(core.setOutput).toHaveBeenCalledWith(
       'attestation-bundle-path',
       '/evidence/attestations'
@@ -391,6 +459,14 @@ describe('main.ts orchestration', () => {
     // No attestation outputs were set.
     expect(outputNames()).not.toContain('attestation-bundle-path')
     expect(outputNames()).not.toContain('attestation-url')
+    expect(writeEvidenceManifest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        result: 'fail',
+        evidence: expect.not.arrayContaining([
+          expect.objectContaining({ role: 'validation-attestation' })
+        ])
+      })
+    )
     // The evidence-complete failure still fires.
     const msg = core.setFailed.mock.calls[0][0] as string
     expect(msg).toMatch(/complete evidence was written/)
@@ -409,14 +485,57 @@ describe('main.ts orchestration', () => {
     )
     expect(drain).toHaveBeenCalledTimes(1)
     expect(validateDisk).not.toHaveBeenCalled()
+    expect(writeEvidenceManifest).not.toHaveBeenCalled()
+    expect(outputNames()).toEqual([])
+  })
+
+  it('does not write or claim a manifest when signing aborts', async () => {
+    parseInputs.mockReturnValue(baseInputs({ signer: 'github' }))
+    sign.mockRejectedValueOnce(new Error('OIDC token request timed out'))
+
+    await run()
+
+    expect(writeChecksums).toHaveBeenCalledTimes(1)
+    expect(writeEvidenceManifest).not.toHaveBeenCalled()
+    expect(outputNames()).toEqual([])
+    expect(core.setFailed).toHaveBeenCalledWith('OIDC token request timed out')
+  })
+
+  it('sets no outputs when the manifest handoff cannot be completed', async () => {
+    writeEvidenceManifest.mockRejectedValueOnce(
+      new Error('evidence file disappeared before manifest hashing')
+    )
+
+    await run()
+
+    expect(writeEvidenceManifest).toHaveBeenCalledTimes(1)
+    expect(outputNames()).toEqual([])
+    expect(core.setFailed).toHaveBeenCalledWith(
+      'evidence file disappeared before manifest hashing'
+    )
   })
 
   it('selects the cyclonedx SBOM basename for cyclonedx-json format', async () => {
     parseInputs.mockReturnValue(baseInputs({ sbomFormat: 'cyclonedx-json' }))
+    generateSbom.mockResolvedValueOnce({
+      path: '/evidence/sbom.cyclonedx.json',
+      format: 'cyclonedx-json',
+      sha256: 'd'.repeat(64)
+    })
 
     await run()
 
     const sbomCall = generateSbom.mock.calls[0]
     expect(sbomCall[3]).toMatch(/sbom\.cyclonedx\.json$/)
+    expect(writeEvidenceManifest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        evidence: expect.arrayContaining([
+          expect.objectContaining({
+            role: 'sbom',
+            mediaType: 'application/vnd.cyclonedx+json'
+          })
+        ])
+      })
+    )
   })
 })
