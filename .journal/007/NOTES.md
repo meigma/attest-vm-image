@@ -226,3 +226,32 @@ resources are provisioned, without granting KMS access to pull-request code.
 Until that run passes, AWS, GCP, Azure, Vault, and OpenBao remain documented as
 URI-contract supported with field testing pending rather than production-
 proven backends.
+
+## 2026-07-22 08:53 — Slice 4 private-consumer exit gate passed
+
+Started `feat/signing-release-hardening` from exact Slice 3 head `c15add7` and
+committed the hardening pass as `9ce3ee47c64a8aa211916394424c5b0d60617af3`.
+The audit found one real contract drift: evidence-manifest entries described
+v0.3 Sigstore bundles with the old generic media type. Source, tests, docs, and
+the packaged action now use the exact
+`application/vnd.dev.sigstore.bundle.v0.3+json` value.
+
+Cross-backend orchestration tests now cover all five signer output conditions,
+exact five-role unsigned and eight-role signed manifest ordering, every signing
+backend being skipped on validation failure, and every signing abort leaving no
+handoff manifest or outputs. Hosted Integration assertions cover the same role
+and URL contracts; its threshold case selects a valid AWS KMS URI without AWS
+credentials, proving validation failure prevents signer invocation. Full local
+`moon run root:check` passed with 262 tests, including committed-dist; strict
+docs and Actionlint also pass.
+
+Disposable private consumer run `29935058715` passed in 4m45s at exact action
+head `9ce3ee4`. The consumer had only `contents: read`, used an encrypted key and
+password from repository secrets, retained its public key separately, signed
+and verified all three bundles, and uploaded the disk plus evidence. After
+download, checksums, exact role order, exact v0.3 media types, and the validation
+result passed; local Cosign independently verified the downloaded validation
+bundle against the separate public key and disk digest. Detailed evidence is in
+`SLICE4_PRIVATE_CONSUMER_REPORT.md`. The disposable repository is ready for
+deletion; next is the stacked PR and ordinary hosted checks. The live AWS KMS
+canary remains a separate Slice 3 prerequisite.
