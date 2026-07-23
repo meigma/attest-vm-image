@@ -52,3 +52,27 @@ Findings:
 
 Assessment delivered; no code changes made. Next: await user direction
 (possible sign-only mode design).
+
+## 2026-07-22 22:51 — Sign-only mode chosen; proposal drafted
+
+The user chose sign-only mode over a reusable workflow (ergonomics). Wrote
+`SIGN_ONLY_MODE_PROPOSAL.md` after grounding the design in the code.
+
+Load-bearing finding: signers never read disk bytes — statements embed
+precomputed digests (`src/sign/statements.ts:41`, `src/sign/github.ts:58`);
+only the small SBOM JSON is re-read. So only the evidence directory crosses
+the job boundary; the multi-GB image stays in the validate job.
+
+Design highlights: subdirectory action `sign/action.yml`
+(`meigma/attest-vm-image/sign@v1`) with its own `dist/sign/` bundle;
+consumes `evidence-manifest.json`, fail-closed re-verification (schema,
+result=pass, unsigned, per-file digest re-hash resolved against the
+manifest dir, statement subject == disk digest, optional disk-path
+re-check); dispatches through the existing selectSigner/sign unchanged;
+atomically rewrites the manifest with bundles + attestationUrl. Shared
+signer/key validation extracted from src/inputs.ts. Integration workflow
+gains a two-job artifact-handoff split on the cosign-key backend. Docs:
+new credential-isolated-signing how-to + reference.md anchors. Target
+v1.3.0.
+
+Next: user approval of the proposal, then implementation.
