@@ -76,3 +76,42 @@ new credential-isolated-signing how-to + reference.md anchors. Target
 v1.3.0.
 
 Next: user approval of the proposal, then implementation.
+
+## 2026-07-22 23:13 — Sign-only action implemented; PR #27 open
+
+User approved the proposal. Implemented in worktree
+`.wt/feat-sign-only-action` (branch `feat/sign-only-action`), commit
+`f73fca5`, PR #27.
+
+What landed:
+
+- `src/sign-only/{inputs,verify,main,index}.ts` + `sign/action.yml`
+  (subdirectory action, `main: ../dist/sign/index.js`, codeql-action
+  pattern) + second rollup bundle `dist/sign/index.js`.
+- Shared `validateSigningInputs` extracted from `src/inputs.ts`;
+  `selectSigner` narrowed to a `SignerSelection` pick (no behavior change).
+- 34 new unit tests (296 total). Integration workflow: `build-image`
+  uploads `evidence-positive` as artifact `unsigned-evidence`; new
+  `sign-evidence` job proves tamper-refusal, cosign-key signing +
+  offline verification, and re-sign refusal.
+- Docs: `credential-isolation.md` how-to, reference `## Sign action`
+  section (inputs/outputs/handoff verification/failure catalog),
+  how-it-works `## Why signing can move to a separate job`, cross-links
+  in signing.md/index.md/README/mkdocs nav.
+
+Gotchas hit (worth remembering):
+
+- `rollup.config.ts` must stay annotation-free JS: tsconfig `include`
+  does not cover it, so `--configPlugin` passes it through unparsed;
+  TS annotations break rollup's parser.
+- eslint `maximumDefaultProjectFileMatchCount` was sized exactly to the
+  allowDefaultProject file count (26); new test files require bumping it
+  (now 29).
+- Prettier reformats YAML inside markdown code fences — indented job
+  fragments get de-indented to column 0, so examples must be
+  self-contained starting at `jobs:`.
+- Pinned latest artifact actions live: upload-artifact v7.0.1
+  `043fb46d`, download-artifact v8.0.1 `3e5f45b2`.
+
+`moon run root:check` and strict docs build pass locally. Next: watch PR
+#27 checks (integration sign-evidence job is the real proof), then review.
