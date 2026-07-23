@@ -4,8 +4,28 @@
 
 - v1 (plan Phases 0-5) landed in PRs #7-#12 (session 002). v1.2.0 adds
   `cosign-key`, `sigstore-keyless`, and `kms` through one shared Cosign engine
-  (session 007, PRs #22-#25). `v1`, `v1.2.0`, and `main` point to release commit
-  `74df230`; Release Please creates a draft and publication advances `v1`.
+  (session 007, PRs #22-#25). v1.3.0 adds the credential-isolated sign-only
+  companion action `meigma/attest-vm-image/sign@v1` (session 008, PR #27).
+  `v1`, `v1.3.0`, and `main` point to release commit `34388fd`; Release Please
+  creates a draft and publication advances `v1`.
+- Sign-only action (session 008): `sign/action.yml` -> `../dist/sign/index.js`
+  (second rollup bundle; the config exports an array and MUST stay
+  annotation-free JS — tsconfig `include` skips it so `--configPlugin` passes
+  it through unparsed). It consumes `evidence-manifest.json`, re-verifies
+  fail-closed (schema, pass result, unsigned, exactly the five core roles,
+  basename resolution against the manifest dir, per-file digest re-hash,
+  statement-subject == disk digest), signs via the unchanged engine, and
+  promotes the manifest atomically. Signers use digests only — the image never
+  crosses the job boundary. `src/tools.ts` resolves package.json nearest-first
+  from both bundle depths; `scripts/smoke-dist.mjs` (run inside the check-dist
+  npm script, NEVER jest — moon runs test/check-dist concurrently and
+  check-dist rimrafs dist/ mid-rebuild) executes both bundles as the runner
+  would. eslint `maximumDefaultProjectFileMatchCount` is sized exactly to the
+  allowDefaultProject file count (30); bump it when adding test/script files.
+  Prettier de-indents YAML fragments in markdown fences — write workflow
+  examples self-contained from `jobs:`. Reusable-workflow layer for keyless
+  trusted-builder identity deliberately deferred (user prefers the two-job
+  action pattern).
 - External signer contract: all three backends sign complete provenance, SBOM,
   and validation statements and self-verify before atomic promotion. Keyless
   requires GitHub OIDC, exact identity/issuer, and one public Rekor entry. Key

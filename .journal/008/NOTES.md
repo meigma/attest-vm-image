@@ -179,3 +179,15 @@ Session goal complete: sign-only companion action designed, implemented
 (PR #27), released (v1.3.0), and live. Remaining thread for a future
 session: an optional reusable workflow layer for keyless trusted-builder
 identity (deferred by user choice).
+
+## 2026-07-23 13:50 — Close
+
+Session closed. PRs #27 (sign-only companion action) and #28 (v1.3.0
+release) are squash-merged; `v1`, `v1.3.0`, and `main` all resolve to
+`34388fd` and the `v1` tag ships `sign/action.yml` + `dist/sign/`.
+Implementation worktree and branch removed; main checkout clean and
+fast-forwarded; no open PRs. `SUMMARY.md` written, `INDEX.md` row set to
+complete, durable context promoted to `TECH_NOTES.md` (sign-only action
+contract, bundle-depth/smoke-dist/rollup-config/eslint-cap/prettier-fence
+gotchas, deferred reusable-workflow thread). Handoff state: nothing in
+flight.

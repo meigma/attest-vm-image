@@ -9,4 +9,4 @@
 | 005 | 2026-07-21 | Operator docs overhaul (Diátaxis) | complete | Replaced design/plan docs with a seven-doc operator-facing Diátaxis set plus slimmed README via PR #17. |
 | 006 | 2026-07-21 | Start a new work session | in-progress | Fresh session primed and awaiting the substantive goal. |
 | 007 | 2026-07-21 | Add private-repository signing backends | complete | Added Cosign-key, Sigstore keyless, and KMS signing, proved private/AWS use, and released v1.2.0. |
-| 008 | 2026-07-22 | Start a new work session | in-progress | Fresh session primed and awaiting the substantive goal. |
+| 008 | 2026-07-22 | Credential-isolated sign-only companion action | complete | Assessed the signing credential-exposure risk, shipped meigma/attest-vm-image/sign@v1 via PR #27, and released v1.3.0. |
