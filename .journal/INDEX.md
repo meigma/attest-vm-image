@@ -8,4 +8,4 @@
 | 004 | 2026-07-21 | Prepare initial release | complete | Release automation targets 1.0.0, maintenance blockers are cleared, and operator docs are live on GitHub Pages. |
 | 005 | 2026-07-21 | Operator docs overhaul (Diátaxis) | complete | Replaced design/plan docs with a seven-doc operator-facing Diátaxis set plus slimmed README via PR #17. |
 | 006 | 2026-07-21 | Start a new work session | in-progress | Fresh session primed and awaiting the substantive goal. |
-| 007 | 2026-07-21 | Start a new work session | in-progress | Fresh session primed and awaiting the substantive goal. |
+| 007 | 2026-07-21 | Add private-repository signing backends | complete | Added Cosign-key, Sigstore keyless, and KMS signing, proved private/AWS use, and released v1.2.0. |

@@ -419,3 +419,16 @@ it. Local `main`, `v1.2.0`, and `v1` now match the remote release commit. The
 downloaded inspection archive was moved to Trash. Both release workflows emitted
 a non-blocking deprecation annotation for the Release App `app-id` input; the
 release and major-tag update still completed successfully.
+
+## 2026-07-22 18:30 — Close
+
+Closed session 007 after confirming the complete handoff. PRs #22, #23, #24,
+#25, and release PR #26 are squash-merged; there are no open PRs or remaining
+implementation worktrees. Local and remote `main`, `v1.2.0`, and `v1` all point
+to release commit `74df230`, and every release-commit workflow passed.
+
+The final summary records the external signer contracts, disposable keyless,
+private-consumer, and AWS KMS proofs, removal of the persistent cloud harness,
+and the v1.2.0 release. Durable technical notes now reflect the released signer
+surface, AWS-only KMS field-test status, account-free testing policy, and the
+nested-worktree root-check caveat. `whzbox` remained clean and unchanged.
