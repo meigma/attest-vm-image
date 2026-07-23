@@ -139,3 +139,19 @@ PR #27 second run: ALL checks pass. sign-evidence completed in 11s vs
 build-image's 5m27s — empirically confirming the no-image-upload,
 no-appliance-rebuild ergonomics of the two-job split. Awaiting user
 review/merge of PR #27.
+
+## 2026-07-23 08:13 — PR #27 merged; main green; release PR #28 pending
+
+User approved ("LGTM. Please merge."). Squash-merged PR #27 as `1056516`
+on main; local main fast-forwarded; `feat/sign-only-action` worktree and
+branch removed (tree matched main). All four post-merge main workflows
+passed: CI, Release Please, GitHub Pages (docs deployed, how-to live),
+and Integration including sign-evidence.
+
+Release Please opened PR #28 proposing v1.3.0. Deliberately NOT merged:
+publication is a separate user decision (session-007 lesson — inspect
+the draft, publish deliberately, verify the moving `v1` tag). Until it
+publishes, `meigma/attest-vm-image/sign@v1` does not yet resolve for
+consumers; the merged docs' `@v1` examples carry the same caveat as the
+v1.0.0 cycle. Asked the user whether to merge #28 and publish or review
+the draft first; awaiting their answer.
