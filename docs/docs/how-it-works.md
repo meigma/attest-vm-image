@@ -214,6 +214,36 @@ something was signed when it was not. A hard failure is the honest outcome; the
 [permissions](reference.md#permissions) reference lays out exactly what
 `signer: github` requires.
 
+## Why signing can move to a separate job
+
+Inline signing has one structural weakness: the credentials that make signing
+possible sit in the same job environment as the tools that parse the image.
+While `qemu-img`, the libguestfs appliance, `syft`, and `grype` chew through a
+potentially untrusted disk, a `COSIGN_PASSWORD`, ambient cloud credentials
+authorized for `kms:Sign`, or the job's OIDC identity are all reachable from
+that environment. A code-execution flaw anywhere in the parsing chain would not
+need to break the signing pipeline at all — it could use the co-resident
+credentials directly, as a signing oracle for arbitrary statements or, for an
+encrypted key file, by exfiltrating the key material itself.
+
+The [sign action](reference.md#sign-action) exists to break that co-residency.
+Validation runs in a job with no signing credentials; the evidence manifest —
+whose digests were sealed when the evidence was written — crosses the job
+boundary as an artifact; and a second job holding the credentials re-verifies
+every digest against the actual bytes before signing with the unchanged
+backends. Because every attestation subject is a digest, the sign job never
+needs the image itself, so the isolation costs one small artifact upload rather
+than a multi-gigabyte copy.
+
+The boundary is honest about what it protects. It removes signing capability
+from the parsing environment — a compromise there yields no key, no oracle, and
+no signature. It does not vouch for how the evidence was produced: a fully
+compromised validation job could emit internally consistent false evidence, and
+the sign job would sign it faithfully. What remains is bounded and detectable —
+forged claims are limited to that run's own handoff, and the credentials, key,
+and signing identity stay uncompromised. The
+[credential-isolation guide](credential-isolation.md) shows the two-job pattern.
+
 ## How it trusts its own tools
 
 A consumer's runner is not the action's development environment. The action

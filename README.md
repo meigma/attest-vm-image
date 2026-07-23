@@ -124,6 +124,8 @@ The full runner, privilege, and network catalog is in the
   workflow, produce a folder of evidence, and verify it yourself.
 - [Publish signed attestations][signing] — how-to: publish with GitHub, public
   Sigstore keyless identity, an encrypted Cosign key, or a KMS key.
+- [Isolate signing credentials][credential-isolation] — how-to: sign in a
+  separate job so credentials never share an environment with image parsing.
 - [Verify evidence and attestations][verification] — how-to: verify checksums
   and published attestations as a downstream consumer.
 - [Control what fails validation][validation-policy] — how-to: tune the
@@ -137,6 +139,8 @@ The full runner, privilege, and network catalog is in the
 
 [getting-started]: https://meigma.github.io/attest-vm-image/getting-started/
 [signing]: https://meigma.github.io/attest-vm-image/signing/
+[credential-isolation]:
+  https://meigma.github.io/attest-vm-image/credential-isolation/
 [verification]: https://meigma.github.io/attest-vm-image/verification/
 [validation-policy]: https://meigma.github.io/attest-vm-image/validation-policy/
 [troubleshooting]: https://meigma.github.io/attest-vm-image/troubleshooting/

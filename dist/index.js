@@ -30244,6 +30244,7 @@ function getIDToken(aud) {
     });
 }
 
+/** Every accepted `signer` input value, in documentation order. */
 const SIGNERS = [
     'none',
     'github',
@@ -30293,6 +30294,38 @@ function parseInputs() {
         throw new Error(`signer must be one of ${SIGNERS.join(', ')}; got "${signer}".`);
     }
     const signingKey = getInput('signing-key') || undefined;
+    validateSigningInputs(signer, signingKey);
+    const policyPath = getInput('policy-path') || undefined;
+    if (policyPath) {
+        try {
+            fs$1.accessSync(policyPath, fs$1.constants.R_OK);
+        }
+        catch {
+            throw new Error(`policy-path "${policyPath}" does not exist or is not readable.`);
+        }
+    }
+    return {
+        diskPath,
+        metadataPath: getInput('metadata-path') || undefined,
+        buildManifestPath: getInput('build-manifest-path') || undefined,
+        outputDirectory,
+        sbomFormat,
+        failOnSeverity,
+        policyPath,
+        signer,
+        signingKey,
+        githubToken: getInput('github-token')
+    };
+}
+/**
+ * Validate a signer selection and its `signing-key` reference, including every
+ * backend-specific environment requirement (encrypted-key password, KMS URI
+ * allowlist, Vault/OpenBao Transit environment, keyless OIDC availability).
+ * Throws an `Error` with a specific, distinct message on the first violation.
+ * Shared verbatim by the main action and the sign-only companion action so the
+ * two entrypoints cannot drift.
+ */
+function validateSigningInputs(signer, signingKey) {
     if (KEY_REFERENCE_BACKENDS.includes(signer) && !signingKey) {
         throw new Error(`signer "${signer}" requires a signing-key reference, but none was provided.`);
     }
@@ -30355,27 +30388,6 @@ function parseInputs() {
         }
         setSecret(oidcRequestToken);
     }
-    const policyPath = getInput('policy-path') || undefined;
-    if (policyPath) {
-        try {
-            fs$1.accessSync(policyPath, fs$1.constants.R_OK);
-        }
-        catch {
-            throw new Error(`policy-path "${policyPath}" does not exist or is not readable.`);
-        }
-    }
-    return {
-        diskPath,
-        metadataPath: getInput('metadata-path') || undefined,
-        buildManifestPath: getInput('build-manifest-path') || undefined,
-        outputDirectory,
-        sbomFormat,
-        failOnSeverity,
-        policyPath,
-        signer,
-        signingKey,
-        githubToken: getInput('github-token')
-    };
 }
 function assertTransitEnvironment(provider, addressName, tokenName) {
     if (!process.env[addressName] || !process.env[tokenName]) {

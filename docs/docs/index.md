@@ -18,6 +18,7 @@ input image.
 
 ## Find an answer
 
+- [Isolate signing credentials](credential-isolation.md)
 - [Verify evidence and attestations](verification.md)
 - [Control validation policy](validation-policy.md)
 - [Troubleshoot a failed run](troubleshooting.md)

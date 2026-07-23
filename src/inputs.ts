@@ -31,7 +31,8 @@ export interface Inputs {
   githubToken: string
 }
 
-const SIGNERS: readonly Signer[] = [
+/** Every accepted `signer` input value, in documentation order. */
+export const SIGNERS: readonly Signer[] = [
   'none',
   'github',
   'sigstore-keyless',
@@ -96,6 +97,45 @@ export function parseInputs(): Inputs {
   }
 
   const signingKey = core.getInput('signing-key') || undefined
+  validateSigningInputs(signer, signingKey)
+
+  const policyPath = core.getInput('policy-path') || undefined
+  if (policyPath) {
+    try {
+      fs.accessSync(policyPath, fs.constants.R_OK)
+    } catch {
+      throw new Error(
+        `policy-path "${policyPath}" does not exist or is not readable.`
+      )
+    }
+  }
+
+  return {
+    diskPath,
+    metadataPath: core.getInput('metadata-path') || undefined,
+    buildManifestPath: core.getInput('build-manifest-path') || undefined,
+    outputDirectory,
+    sbomFormat,
+    failOnSeverity,
+    policyPath,
+    signer,
+    signingKey,
+    githubToken: core.getInput('github-token')
+  }
+}
+
+/**
+ * Validate a signer selection and its `signing-key` reference, including every
+ * backend-specific environment requirement (encrypted-key password, KMS URI
+ * allowlist, Vault/OpenBao Transit environment, keyless OIDC availability).
+ * Throws an `Error` with a specific, distinct message on the first violation.
+ * Shared verbatim by the main action and the sign-only companion action so the
+ * two entrypoints cannot drift.
+ */
+export function validateSigningInputs(
+  signer: Signer,
+  signingKey: string | undefined
+): void {
   if (KEY_REFERENCE_BACKENDS.includes(signer) && !signingKey) {
     throw new Error(
       `signer "${signer}" requires a signing-key reference, but none was provided.`
@@ -180,30 +220,6 @@ export function parseInputs(): Inputs {
       )
     }
     core.setSecret(oidcRequestToken)
-  }
-
-  const policyPath = core.getInput('policy-path') || undefined
-  if (policyPath) {
-    try {
-      fs.accessSync(policyPath, fs.constants.R_OK)
-    } catch {
-      throw new Error(
-        `policy-path "${policyPath}" does not exist or is not readable.`
-      )
-    }
-  }
-
-  return {
-    diskPath,
-    metadataPath: core.getInput('metadata-path') || undefined,
-    buildManifestPath: core.getInput('build-manifest-path') || undefined,
-    outputDirectory,
-    sbomFormat,
-    failOnSeverity,
-    policyPath,
-    signer,
-    signingKey,
-    githubToken: core.getInput('github-token')
   }
 }
 

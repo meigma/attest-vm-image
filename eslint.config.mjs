@@ -58,7 +58,7 @@ export default [
 
       parserOptions: {
         projectService: {
-          maximumDefaultProjectFileMatchCount_THIS_WILL_SLOW_DOWN_LINTING: 26,
+          maximumDefaultProjectFileMatchCount_THIS_WILL_SLOW_DOWN_LINTING: 29,
           allowDefaultProject: [
             '__fixtures__/*.ts',
             '__tests__/*.ts',

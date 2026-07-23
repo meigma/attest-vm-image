@@ -29,6 +29,7 @@ fileGroups:
   sources:
     - 'src/**/*.ts'
     - 'action.yml'
+    - 'sign/action.yml'
   tests:
     - '__tests__/**/*.ts'
     - '__fixtures__/**/*.ts'
