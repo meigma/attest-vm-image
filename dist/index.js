@@ -34112,10 +34112,24 @@ async function exec(cmd, args = [], opts = {}) {
 // @rollup/plugin-typescript, which cannot resolve it and degrades to returning
 // untransformed TypeScript for the whole program — breaking the rollup bundle.
 // createRequire keeps JSON resolution entirely off the TS compiler's path. The
-// action's repository (including package.json, one level up from dist/index.js)
-// is checked out at runtime, so `../package.json` resolves for both the bundled
-// action and the test/src layout.
-const packageJson = createRequire(import.meta.url)('../package.json');
+// action's repository (including its root package.json) is checked out at
+// runtime, but this module runs from more than one depth: src/tools.ts and
+// dist/index.js sit one level below the root, while the sign-only bundle
+// dist/sign/index.js sits two levels below. Nearest-first candidates keep every
+// layout resolving to the same repository-root file.
+const packageJson = (() => {
+    const require = createRequire(import.meta.url);
+    const candidates = ['../package.json', '../../package.json'];
+    for (const candidate of candidates) {
+        try {
+            return require(candidate);
+        }
+        catch {
+            // Try the next depth.
+        }
+    }
+    throw new Error('internal error: the action repository package.json was not found next to the bundle.');
+})();
 const PINNED_TOOLS = {
     syft: {
         version: '1.48.0',
