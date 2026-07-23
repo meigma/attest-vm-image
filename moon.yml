@@ -29,6 +29,7 @@ fileGroups:
   sources:
     - 'src/**/*.ts'
     - 'action.yml'
+    - 'sign/action.yml'
   tests:
     - '__tests__/**/*.ts'
     - '__fixtures__/**/*.ts'
@@ -131,6 +132,7 @@ tasks:
       - '@group(bundleConfigs)'
       - '@group(configs)'
       - 'dist/**'
+      - 'scripts/smoke-dist.mjs'
     options:
       cache: false
 

@@ -25,11 +25,15 @@ const trimTrailingWhitespace = {
 // dynamic imports are inlined into the one chunk.
 const OPTIONAL_NATIVE_DEPS = new Set(['kerberos'])
 
-const config = {
-  input: 'src/index.ts',
+// One committed bundle per action entrypoint: the main action and the
+// sign-only companion action (`sign/action.yml` -> `../dist/sign/index.js`).
+// This file must stay annotation-free JavaScript: the tsconfig `include` does
+// not cover it, so the --configPlugin transform passes it through untouched.
+const bundle = (input, file) => ({
+  input,
   output: {
     esModule: true,
-    file: 'dist/index.js',
+    file,
     format: 'es',
     inlineDynamicImports: true,
     sourcemap: true
@@ -54,6 +58,9 @@ const config = {
     commonjs(),
     trimTrailingWhitespace
   ]
-}
+})
 
-export default config
+export default [
+  bundle('src/index.ts', 'dist/index.js'),
+  bundle('src/sign-only/index.ts', 'dist/sign/index.js')
+]

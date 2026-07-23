@@ -355,6 +355,108 @@ Notes:
   live endpoint. Field-by-field definitions:
   [predicate/vm-image-validation-v1.md](predicate/vm-image-validation-v1.md).
 
+## Sign action
+
+`meigma/attest-vm-image/sign@v1` is the companion action for credential-isolated
+signing. It consumes an [evidence manifest](#evidence-manifestjson) written by
+the main action with `signer: none`, re-verifies the whole handoff fail-closed,
+signs it with the same backends the main action uses, and atomically promotes
+the manifest to the signed form described above. It runs no image parsing, and
+the disk image does not need to be present in its job. Task-oriented
+instructions are in [Isolate signing credentials](credential-isolation.md).
+
+### Sign action inputs
+
+| Input               | Required | Default                             | Allowed values / format                                                                                              |
+| ------------------- | -------- | ----------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `evidence-manifest` | No       | `./evidence/evidence-manifest.json` | Path to the manifest written by the main action. Its evidence files must sit in the same directory.                  |
+| `disk-path`         | No       | (unset)                             | Optional path to the QCOW2 image; when set, the image is re-hashed against the manifest's recorded digest.           |
+| `signer`            | Yes      | —                                   | `github`, `sigstore-keyless`, `cosign-key`, `kms`. `none` is rejected.                                               |
+| `signing-key`       | No       | (unset)                             | Identical contract to the main action's [`signing-key`](#inputs), including the [KMS allowlist](#kms-uri-allowlist). |
+| `github-token`      | No       | `${{ github.token }}`               | Identical contract to the main action's [`github-token`](#inputs).                                                   |
+
+Notes:
+
+- Backend behavior, [permissions](#permissions), environment requirements, and
+  the produced [attestation bundles](#attestation-bundles) are identical to
+  inline signing with the main action; only the entrypoint differs.
+- The signing job needs only the evidence directory. Signing operates on the
+  digests recorded in the manifest, so the multi-gigabyte image never has to
+  cross the job boundary; `disk-path` exists purely as an optional extra check
+  for callers that have the image present anyway.
+
+### Handoff verification
+
+Before any signing tool runs, the sign action re-verifies the handoff and fails
+closed with a distinct message on the first violation:
+
+- The manifest exists, parses, and declares `schemaVersion` `"1"` with a
+  well-formed `artifacts.disk` digest.
+- `result` is `pass`. A failing result is never signed, exactly as with inline
+  signing.
+- The manifest is unsigned: it carries no `attestationUrl` and no
+  `*-attestation` evidence roles. Re-signing a signed manifest is refused.
+- The evidence list carries exactly the five core roles, in order, with unique
+  basenames. Each file is located as `dirname(manifest)/basename(recorded path)`
+  — the main action co-locates all evidence with the manifest under
+  `output-directory` — so the handoff survives an artifact upload/download that
+  re-roots the directory.
+- Every evidence file is re-hashed and must match its recorded digest exactly.
+- The `validation-predicate` file must parse as the in-toto validation
+  statement, its subject digest must equal the manifest's recorded disk digest,
+  and its predicate `result` must be `pass`.
+- When `disk-path` is set, the image is re-hashed and must match the manifest's
+  recorded disk digest.
+
+On success the manifest is rewritten in place with the three `*-attestation`
+roles appended and `attestationUrl` recorded when the backend returns one; the
+promotion is atomic (temp file plus rename), so a failure at any point leaves
+the manifest exactly as it was read. Evidence paths in the promoted manifest are
+recorded in their locally-resolved form.
+
+### Sign action outputs
+
+| Output                    | Format / value                                 | Set when                    |
+| ------------------------- | ---------------------------------------------- | --------------------------- |
+| `attestation-bundle-path` | `<manifest directory>/attestations`            | Successful signing          |
+| `attestation-url`         | URL of the validation attestation only         | Successful `signer: github` |
+| `evidence-manifest-path`  | The `evidence-manifest` input path, now signed | Successful signing          |
+
+No output is set on any failure, and a failed run never modifies the manifest or
+leaves partial bundles behind.
+
+### Sign action failure modes
+
+Input validation reuses the main action's signer rules and messages (see
+[Input validation](#input-validation)), with three sign-only additions, and the
+handoff verification above emits the following messages:
+
+| Condition                                        | Message                                                                                                                                                                  |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `signer` empty or unset                          | `signer is required but was not provided.`                                                                                                                               |
+| `signer` is `none`                               | `signer "none" is not valid for the sign action; select one of github, sigstore-keyless, cosign-key, kms, or omit this step entirely.`                                   |
+| `signer` not in the allowed set                  | `signer must be one of github, sigstore-keyless, cosign-key, kms; got "<value>".`                                                                                        |
+| Manifest missing or unreadable                   | `evidence-manifest "<path>" does not exist or is not readable.`                                                                                                          |
+| Manifest is not JSON                             | `evidence-manifest "<path>" is not valid JSON.`                                                                                                                          |
+| Unknown schema version or malformed document     | `evidence-manifest "<path>" is not a schemaVersion "1" evidence manifest.`                                                                                               |
+| Manifest records `result: fail`                  | `evidence-manifest "<path>" records result "fail"; a failing result is never signed.`                                                                                    |
+| Manifest already records an attestation URL      | `evidence-manifest "<path>" already records an attestation URL; re-signing a signed manifest is refused.`                                                                |
+| Manifest already contains attestation bundles    | `evidence-manifest "<path>" already contains attestation bundles; re-signing a signed manifest is refused.`                                                              |
+| Evidence roles missing, extra, or out of order   | `evidence-manifest "<path>" must carry exactly the evidence roles checksums, sbom, vulnerability-report, validation-report, validation-predicate in order; got <roles>.` |
+| Recorded digest is not 64 lowercase hex          | `evidence-manifest "<path>" records a malformed sha256 for role "<role>".`                                                                                               |
+| Two evidence entries share a basename            | `evidence-manifest "<path>" records duplicate evidence basename "<name>".`                                                                                               |
+| Evidence file missing next to the manifest       | `evidence file "<path>" (role "<role>") does not exist or is not readable.`                                                                                              |
+| Evidence file bytes changed since the manifest   | `evidence file "<path>" (role "<role>") does not match its recorded digest; the handoff was modified and is refused.`                                                    |
+| SBOM media type is not SPDX or CycloneDX         | `evidence-manifest "<path>" records unsupported SBOM media type "<value>".`                                                                                              |
+| Predicate file is not the validation statement   | `validation predicate "<path>" is not a "<predicate type>" in-toto statement.`                                                                                           |
+| Statement subject digest mismatches the manifest | `validation predicate "<path>" subject digest does not match the manifest's recorded disk digest.`                                                                       |
+| Statement predicate records a non-passing result | `validation predicate "<path>" records a non-passing result; a failing result is never signed.`                                                                          |
+| `disk-path` set but missing or unreadable        | `disk-path "<path>" does not exist or is not readable.`                                                                                                                  |
+| `disk-path` bytes mismatch the recorded digest   | `disk-path "<path>" does not match the manifest's recorded disk digest; refusing to sign.`                                                                               |
+
+Signing-stage failures (Cosign, OIDC, KMS, attestation API) are the same as the
+main action's and are cataloged under [Failure modes](#failure-modes).
+
 ## Metadata archive rules
 
 Applies when `metadata-path` is set. The tarball is validated entry by entry

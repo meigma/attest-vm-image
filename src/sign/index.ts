@@ -1,4 +1,4 @@
-import type { Inputs } from '../inputs.js'
+import type { Signer as SignerName } from '../inputs.js'
 import type { Signer } from './types.js'
 import { GithubSigner } from './github.js'
 import { CosignKeySigner, KmsSigner, SigstoreKeylessSigner } from './cosign.js'
@@ -6,12 +6,23 @@ import { CosignKeySigner, KmsSigner, SigstoreKeylessSigner } from './cosign.js'
 export type { SignArtifact, SignContext, SignResult, Signer } from './types.js'
 
 /**
+ * The subset of action inputs that selects and configures a signing backend.
+ * `Inputs` satisfies this structurally; the sign-only companion action supplies
+ * it without the main action's pipeline inputs.
+ */
+export interface SignerSelection {
+  signer: SignerName
+  signingKey?: string
+  githubToken: string
+}
+
+/**
  * Select the signing backend named by `inputs.signer`. Returns `null` for
  * `none` (no signing) and the exact requested implementation for each supported
  * backend. Unimplemented values throw a diagnostic naming the requested backend
  * and NEVER fall back, so a caller cannot silently get a different signer.
  */
-export function selectSigner(inputs: Inputs): Signer | null {
+export function selectSigner(inputs: SignerSelection): Signer | null {
   switch (inputs.signer) {
     case 'none':
       return null

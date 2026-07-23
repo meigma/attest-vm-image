@@ -1,0 +1,54 @@
+name: attest-vm-image sign
+description:
+  Sign an attest-vm-image evidence manifest in a separate job, so signing
+  credentials never share an environment with image parsing.
+author: Meigma
+
+branding:
+  icon: shield
+  color: blue
+
+inputs:
+  evidence-manifest:
+    description:
+      Path to the evidence-manifest.json written by the attest-vm-image action
+      with signer none. Every evidence file it records must sit next to it and
+      match its recorded digest.
+    required: false
+    default: ./evidence/evidence-manifest.json
+  disk-path:
+    description:
+      Optional path to the QCOW2 image for an extra digest re-check against the
+      manifest. Signing needs only digests, so the image does not have to be
+      present in this job.
+    required: false
+  signer:
+    description:
+      Signing backend - github, sigstore-keyless, cosign-key, or kms. Required;
+      none is not valid here.
+    required: true
+  signing-key:
+    description:
+      Encrypted key file or env://NAME for cosign-key, or an allowlisted KMS URI
+      for kms; a reference only, never raw private-key bytes.
+    required: false
+  github-token:
+    description:
+      Token used by signer github to push attestations to the GitHub attestation
+      API. Defaults to the job token and must carry the attestations write
+      permission; rarely needs overriding.
+    required: false
+    default: ${{ github.token }}
+
+outputs:
+  attestation-bundle-path:
+    description: Directory of signed attestation bundles.
+  attestation-url:
+    description: URL of the validation attestation, set for signer github.
+  evidence-manifest-path:
+    description:
+      Path to the evidence manifest, now including the attestation bundles.
+
+runs:
+  using: node24
+  main: ../dist/sign/index.js

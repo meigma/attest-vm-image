@@ -32,6 +32,12 @@ keyless bundles, or portable bundles signed with an encrypted Cosign or KMS key.
 All signing modes create the same three stable bundle roles. Only `github`
 publishes them and sets `attestation-url`.
 
+Every backend can also run in a separate job from image parsing, so signing
+credentials never share an environment with the inspection tool chain. This
+guide shows inline signing; the two-job variant is in
+[Isolate signing credentials](credential-isolation.md) and changes only where
+the signing step and its credentials live.
+
 ## Publish with GitHub
 
 ### Check your repository is eligible
@@ -388,6 +394,7 @@ inspect the provider authentication step and audit log for the specific denial.
 
 ## Related
 
+- [Isolate signing credentials](credential-isolation.md)
 - [Verify evidence and attestations](verification.md)
 - [Control what fails validation](validation-policy.md)
 - [Reference: Permissions](reference.md#permissions),

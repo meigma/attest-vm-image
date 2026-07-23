@@ -30244,6 +30244,7 @@ function getIDToken(aud) {
     });
 }
 
+/** Every accepted `signer` input value, in documentation order. */
 const SIGNERS = [
     'none',
     'github',
@@ -30293,6 +30294,38 @@ function parseInputs() {
         throw new Error(`signer must be one of ${SIGNERS.join(', ')}; got "${signer}".`);
     }
     const signingKey = getInput('signing-key') || undefined;
+    validateSigningInputs(signer, signingKey);
+    const policyPath = getInput('policy-path') || undefined;
+    if (policyPath) {
+        try {
+            fs$1.accessSync(policyPath, fs$1.constants.R_OK);
+        }
+        catch {
+            throw new Error(`policy-path "${policyPath}" does not exist or is not readable.`);
+        }
+    }
+    return {
+        diskPath,
+        metadataPath: getInput('metadata-path') || undefined,
+        buildManifestPath: getInput('build-manifest-path') || undefined,
+        outputDirectory,
+        sbomFormat,
+        failOnSeverity,
+        policyPath,
+        signer,
+        signingKey,
+        githubToken: getInput('github-token')
+    };
+}
+/**
+ * Validate a signer selection and its `signing-key` reference, including every
+ * backend-specific environment requirement (encrypted-key password, KMS URI
+ * allowlist, Vault/OpenBao Transit environment, keyless OIDC availability).
+ * Throws an `Error` with a specific, distinct message on the first violation.
+ * Shared verbatim by the main action and the sign-only companion action so the
+ * two entrypoints cannot drift.
+ */
+function validateSigningInputs(signer, signingKey) {
     if (KEY_REFERENCE_BACKENDS.includes(signer) && !signingKey) {
         throw new Error(`signer "${signer}" requires a signing-key reference, but none was provided.`);
     }
@@ -30355,27 +30388,6 @@ function parseInputs() {
         }
         setSecret(oidcRequestToken);
     }
-    const policyPath = getInput('policy-path') || undefined;
-    if (policyPath) {
-        try {
-            fs$1.accessSync(policyPath, fs$1.constants.R_OK);
-        }
-        catch {
-            throw new Error(`policy-path "${policyPath}" does not exist or is not readable.`);
-        }
-    }
-    return {
-        diskPath,
-        metadataPath: getInput('metadata-path') || undefined,
-        buildManifestPath: getInput('build-manifest-path') || undefined,
-        outputDirectory,
-        sbomFormat,
-        failOnSeverity,
-        policyPath,
-        signer,
-        signingKey,
-        githubToken: getInput('github-token')
-    };
 }
 function assertTransitEnvironment(provider, addressName, tokenName) {
     if (!process.env[addressName] || !process.env[tokenName]) {
@@ -34100,10 +34112,24 @@ async function exec(cmd, args = [], opts = {}) {
 // @rollup/plugin-typescript, which cannot resolve it and degrades to returning
 // untransformed TypeScript for the whole program — breaking the rollup bundle.
 // createRequire keeps JSON resolution entirely off the TS compiler's path. The
-// action's repository (including package.json, one level up from dist/index.js)
-// is checked out at runtime, so `../package.json` resolves for both the bundled
-// action and the test/src layout.
-const packageJson = createRequire(import.meta.url)('../package.json');
+// action's repository (including its root package.json) is checked out at
+// runtime, but this module runs from more than one depth: src/tools.ts and
+// dist/index.js sit one level below the root, while the sign-only bundle
+// dist/sign/index.js sits two levels below. Nearest-first candidates keep every
+// layout resolving to the same repository-root file.
+const packageJson = (() => {
+    const require = createRequire(import.meta.url);
+    const candidates = ['../package.json', '../../package.json'];
+    for (const candidate of candidates) {
+        try {
+            return require(candidate);
+        }
+        catch {
+            // Try the next depth.
+        }
+    }
+    throw new Error('internal error: the action repository package.json was not found next to the bundle.');
+})();
 const PINNED_TOOLS = {
     syft: {
         version: '1.48.0',

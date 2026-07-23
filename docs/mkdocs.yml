@@ -39,6 +39,7 @@ nav:
       - Getting started: getting-started.md
   - How-to guides:
       - Publish signed attestations: signing.md
+      - Isolate signing credentials: credential-isolation.md
       - Verify evidence and attestations: verification.md
       - Control validation policy: validation-policy.md
       - Troubleshoot a failed run: troubleshooting.md
