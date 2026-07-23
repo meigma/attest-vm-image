@@ -155,3 +155,27 @@ publishes, `meigma/attest-vm-image/sign@v1` does not yet resolve for
 consumers; the merged docs' `@v1` examples carry the same caveat as the
 v1.0.0 cycle. Asked the user whether to merge #28 and publish or review
 the draft first; awaiting their answer.
+
+## 2026-07-23 12:10 — v1.3.0 released; all gates verified
+
+User asked to cut and watch the release. Squash-merged release PR #28
+(`34388fd`), inspected the Release Please draft (single feat entry for
+PR #27), published it, and verified the full chain: `v1`, `v1.3.0`, and
+`main` all resolve to `34388fd`; Major Version Tag workflow succeeded;
+`git show v1:sign/action.yml` and `v1:dist/sign/index.js` confirm the
+sign action ships in the tag — `meigma/attest-vm-image/sign@v1` resolves
+for consumers now.
+
+Release-commit workflows: CI, Release Please, and GitHub Pages passed
+first try. Integration stalled ~50 min on its FIRST action step (the
+identical tree passed in 7 min hours earlier; no live log blob existed —
+a wedged runner, not a regression). Cancelled and reran the run
+(attempt 2): build-image, sign-image, and sign-evidence all green.
+Lesson: a release-commit workflow hung on step 1 with no log available
+is runner infrastructure; cancel + rerun the same immutable commit
+rather than diagnosing the code.
+
+Session goal complete: sign-only companion action designed, implemented
+(PR #27), released (v1.3.0), and live. Remaining thread for a future
+session: an optional reusable workflow layer for keyless trusted-builder
+identity (deferred by user choice).
