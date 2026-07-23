@@ -115,3 +115,27 @@ Gotchas hit (worth remembering):
 
 `moon run root:check` and strict docs build pass locally. Next: watch PR
 #27 checks (integration sign-evidence job is the real proof), then review.
+
+## 2026-07-22 23:27 — CI caught a bundle-depth bug; PR #27 fully green
+
+First CI run: sign-evidence crashed at bundle load. `src/tools.ts` loads
+the repo package.json via `createRequire('../package.json')`, which
+assumed the bundle sits one level below the root; `dist/sign/index.js`
+sits two levels down and hit the nonexistent `dist/package.json`. Unit
+tests cannot see this (bundle-layout property, not source logic).
+
+Fix (`6c17517`): nearest-first resolution over
+`['../package.json', '../../package.json']` in tools.ts. Added a bundle
+smoke test executing both committed bundles with node and asserting each
+fails with its own first input diagnostic (not MODULE_NOT_FOUND).
+
+Second lesson (follow-up commit): the smoke test CANNOT live in jest —
+`moon check` runs root:test and root:check-dist concurrently, and
+check-dist rimrafs `dist/` mid-rebuild, so the jest variant raced and
+failed on a missing file. It now runs as `scripts/smoke-dist.mjs`
+appended to the check-dist npm script, sequentially after rebuild+diff.
+
+PR #27 second run: ALL checks pass. sign-evidence completed in 11s vs
+build-image's 5m27s — empirically confirming the no-image-upload,
+no-appliance-rebuild ergonomics of the two-job split. Awaiting user
+review/merge of PR #27.
