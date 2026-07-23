@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.0](https://github.com/meigma/attest-vm-image/compare/v1.2.0...v1.3.0) (2026-07-23)
+
+
+### Features
+
+* **sign:** add credential-isolated sign-only companion action ([#27](https://github.com/meigma/attest-vm-image/issues/27)) ([1056516](https://github.com/meigma/attest-vm-image/commit/1056516bcf1ffe4f41561b175736974b3e69eac4))
+
 ## [1.2.0](https://github.com/meigma/attest-vm-image/compare/v1.1.0...v1.2.0) (2026-07-22)
 
 
